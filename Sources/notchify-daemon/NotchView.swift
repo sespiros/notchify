@@ -11,7 +11,9 @@ struct NotchView: View {
     @State private var heightExpanded = false
     @State private var textVisible = false
     @State private var iconVisible = false
+    @State private var animationTask: Task<Void, Never>?
     @State private var dismissTask: Task<Void, Never>?
+    @State private var isDismissing = false
 
     static let leftExtra: CGFloat = 31       // shelf width past notch's left edge in phase 1
     static let extraHeight: CGFloat = 44     // phase-2 height (a bit more than 2x notch for breathing room)
@@ -50,6 +52,10 @@ struct NotchView: View {
         .frame(width: panelWidth, height: panelHeight, alignment: .topTrailing)
         .offset(y: slidIn ? 0 : -(notchSize.height + Self.extraHeight + 4))
         .onAppear { schedule() }
+        .onDisappear {
+            animationTask?.cancel()
+            dismissTask?.cancel()
+        }
     }
 
     private var content: some View {
@@ -99,25 +105,39 @@ struct NotchView: View {
     }
 
     private func schedule() {
+        animationTask?.cancel()
+        isDismissing = false
+
         // Snappy slide-in then snappy left expand, tiny pause, then a
         // more pronounced drop-down for text. easeOut is cheaper than
         // spring and visually nearly identical at these durations.
-        withAnimation(.easeOut(duration: 0.22)) { slidIn = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+        animationTask = Task { @MainActor in
+            withAnimation(.easeOut(duration: 0.22)) { slidIn = true }
+
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else { return }
             withAnimation(.easeOut(duration: 0.18)) { widthExpanded = true }
-            withAnimation(.easeIn(duration: 0.12).delay(0.05)) { iconVisible = true }
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+
+            try? await Task.sleep(for: .milliseconds(50))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeIn(duration: 0.12)) { iconVisible = true }
+
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else { return }
             withAnimation(.easeOut(duration: 0.32)) { heightExpanded = true }
-            withAnimation(.easeIn(duration: 0.2).delay(0.2)) { textVisible = true }
+
+            try? await Task.sleep(for: .milliseconds(200))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeIn(duration: 0.2)) { textVisible = true }
         }
+
         scheduleDismiss(in: message.timeout ?? 5.0)
     }
 
     private func scheduleDismiss(in seconds: TimeInterval) {
         dismissTask?.cancel()
         dismissTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            try? await Task.sleep(for: .seconds(seconds))
             if !Task.isCancelled { dismiss() }
         }
     }
@@ -138,18 +158,36 @@ struct NotchView: View {
     }
 
     private func dismiss() {
+        guard !isDismissing else { return }
+        isDismissing = true
+
+        animationTask?.cancel()
         dismissTask?.cancel()
+
         // Continuous fluid reverse. Each step staggered slightly so the
         // motion reads as one smooth retraction.
-        withAnimation(.easeOut(duration: 0.16)) { textVisible = false }
-        withAnimation(.easeInOut(duration: 0.28).delay(0.05)) { heightExpanded = false }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
+        animationTask = Task { @MainActor in
+            withAnimation(.easeOut(duration: 0.16)) { textVisible = false }
+
+            try? await Task.sleep(for: .milliseconds(50))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeInOut(duration: 0.28)) { heightExpanded = false }
+
+            try? await Task.sleep(for: .milliseconds(270))
+            guard !Task.isCancelled else { return }
             withAnimation(.easeOut(duration: 0.13)) { iconVisible = false }
-            withAnimation(.easeInOut(duration: 0.25).delay(0.05)) { widthExpanded = false }
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.62) {
+
+            try? await Task.sleep(for: .milliseconds(50))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeInOut(duration: 0.25)) { widthExpanded = false }
+
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled else { return }
             withAnimation(.easeIn(duration: 0.24)) { slidIn = false }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.26) { onDismiss() }
+
+            try? await Task.sleep(for: .milliseconds(260))
+            guard !Task.isCancelled else { return }
+            onDismiss()
         }
     }
 }
