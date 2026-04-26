@@ -14,39 +14,52 @@ struct NotchGeometry {
     let notchRect: CGRect
 
     static func current() -> NotchGeometry? {
-        guard let screen = targetDisplay else { return nil }
+        guard let screen = preferredDisplay else { return nil }
         return forScreen(screen)
     }
 
-    static var targetDisplay: NSScreen? {
-        NSScreen.screens.first(where: { $0.snapshot.hasBuiltInNotch })
+    static var preferredDisplay: NSScreen? {
+        NSScreen.screens.first ?? NSScreen.main
     }
 
     static func forScreen(_ screen: NSScreen) -> NotchGeometry? {
-        guard let geometry = geometry(for: screen.snapshot) else { return nil }
+        let geometry = geometry(for: screen.snapshot)
         return NotchGeometry(screen: screen, notchSize: geometry.notchSize, notchRect: geometry.notchRect)
     }
 
-    static func geometry(for snapshot: ScreenSnapshot) -> (notchSize: CGSize, notchRect: CGRect)? {
-        guard snapshot.hasBuiltInNotch,
-              let leftWidth = snapshot.auxiliaryTopLeftWidth,
-              let rightWidth = snapshot.auxiliaryTopRightWidth else {
-            return nil
+    static func geometry(for snapshot: ScreenSnapshot) -> (notchSize: CGSize, notchRect: CGRect) {
+        if snapshot.hasBuiltInNotch,
+           let leftWidth = snapshot.auxiliaryTopLeftWidth,
+           let rightWidth = snapshot.auxiliaryTopRightWidth {
+            let notchWidth = snapshot.frame.width - leftWidth - rightWidth
+            if notchWidth > 0 {
+                let notchSize = CGSize(width: notchWidth, height: snapshot.safeAreaTop)
+                let notchRect = CGRect(
+                    x: snapshot.frame.midX - (notchWidth / 2),
+                    y: snapshot.frame.maxY - snapshot.safeAreaTop,
+                    width: notchWidth,
+                    height: snapshot.safeAreaTop
+                )
+
+                return (notchSize, notchRect)
+            }
         }
 
-        let notchWidth = snapshot.frame.width - leftWidth - rightWidth
-        guard notchWidth > 0 else { return nil }
-
-        let notchSize = CGSize(width: notchWidth, height: snapshot.safeAreaTop)
+        let notchWidth = min(Self.syntheticNotchWidth, snapshot.frame.width * 0.28)
+        let notchHeight = Self.syntheticNotchHeight
+        let notchSize = CGSize(width: notchWidth, height: notchHeight)
         let notchRect = CGRect(
             x: snapshot.frame.midX - (notchWidth / 2),
-            y: snapshot.frame.maxY - snapshot.safeAreaTop,
+            y: snapshot.frame.maxY - notchHeight,
             width: notchWidth,
-            height: snapshot.safeAreaTop
+            height: notchHeight
         )
 
         return (notchSize, notchRect)
     }
+
+    private static let syntheticNotchWidth: CGFloat = 210
+    private static let syntheticNotchHeight: CGFloat = 32
 }
 
 private extension ScreenSnapshot {
