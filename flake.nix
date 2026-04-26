@@ -75,7 +75,7 @@
     #   programs.notchify.enable = true;
     darwinModules.default = { config, lib, pkgs, ... }: let
       cfg = config.programs.notchify;
-      pkg = self.packages.${pkgs.system}.notchify;
+      pkg = self.packages.${pkgs.stdenv.hostPlatform.system}.notchify;
     in {
       options.programs.notchify = {
         enable = lib.mkEnableOption "notchify menubar app and CLI";
