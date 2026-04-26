@@ -5,3 +5,4 @@ DerivedData/
 .DS_Store
 dist/
 Resources/AppIcon.iconset/
+.claude/
