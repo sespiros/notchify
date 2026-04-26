@@ -24,30 +24,35 @@ struct NotchView: View {
         let panelWidth = notchSize.width + Self.leftExtra
         let panelHeight = notchSize.height + Self.extraHeight
 
-        ZStack(alignment: .topTrailing) {
-            UnevenRoundedRectangle(
-                topLeadingRadius: 0,
-                bottomLeadingRadius: 9,
-                bottomTrailingRadius: 9,
-                topTrailingRadius: 0
-            )
-            .fill(Color.black)
-            .frame(width: frameWidth, height: frameHeight)
-            .contentShape(Rectangle())
-            .onTapGesture {
+        Button(action: {
+            if message.action != nil {
                 onClick()
-                dismiss()
             }
-            .onHover { hovering in
-                if hovering {
-                    dismissTask?.cancel()
-                } else {
-                    scheduleDismiss(in: message.timeout ?? 5.0)
-                }
-            }
+            dismiss()
+        }) {
+            ZStack(alignment: .topTrailing) {
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 0,
+                    bottomLeadingRadius: 9,
+                    bottomTrailingRadius: 9,
+                    topTrailingRadius: 0
+                )
+                .fill(Color.black)
+                .frame(width: frameWidth, height: frameHeight)
 
-            content
-                .frame(width: frameWidth, height: frameHeight, alignment: .topLeading)
+                content
+                    .frame(width: frameWidth, height: frameHeight, alignment: .topLeading)
+            }
+        }
+        .buttonStyle(NoFeedbackButtonStyle())
+        .contentShape(Rectangle())
+        .accessibilityLabel(message.action == nil ? "Dismiss notification" : "Open notification")
+        .onHover { hovering in
+            if hovering {
+                dismissTask?.cancel()
+            } else {
+                scheduleDismiss(in: message.timeout ?? 5.0)
+            }
         }
         .frame(width: panelWidth, height: panelHeight, alignment: .topTrailing)
         .offset(y: slidIn ? 0 : -(notchSize.height + Self.extraHeight + 4))
