@@ -56,14 +56,15 @@ out of the MacBook camera notch on the built-in display, plus a CLI
 
 ## Notch geometry
 
-- `screen.auxiliaryTopLeftArea` and `auxiliaryTopRightArea` over-estimate
-  the notch's *visible* width by ~20pt on each side. Don't size the
-  panel from `screen.frame.width - leftAux.width - rightAux.width`.
-- Hard-code a default (`178pt` fits a MacBook Air M4 at default
-  resolution; 14"/16" Pros are similar) and allow override via
-  `NOTCHIFY_NOTCH_WIDTH` env var.
-- Always pick the screen with `safeAreaInsets.top > 0` so the overlay
-  lands on the MacBook display when an external monitor is connected.
+- Use only macOS public screen geometry APIs for placement:
+  `safeAreaInsets.top` for height, and
+  `screen.frame.width - auxiliaryTopLeftArea.width - auxiliaryTopRightArea.width`
+  for the notch bounding width.
+- Only render when an active built-in display with `safeAreaInsets.top > 0`
+  exists. Desktop Macs and external-only/clamshell setups should drop
+  notifications rather than inventing notch geometry.
+- Always target the built-in notched display so the overlay lands on the
+  MacBook screen when an external monitor is connected.
 
 ## README & docs
 
