@@ -14,6 +14,7 @@ struct NotchView: View {
     @State private var animationTask: Task<Void, Never>?
     @State private var dismissTask: Task<Void, Never>?
     @State private var isDismissing = false
+    @State private var loadedIcon: NSImage?
 
     static let leftExtra: CGFloat = 31       // shelf width past notch's left edge in phase 1
     static let extraHeight: CGFloat = 44     // phase-2 height (a bit more than 2x notch for breathing room)
@@ -56,7 +57,12 @@ struct NotchView: View {
         }
         .frame(width: panelWidth, height: panelHeight, alignment: .topTrailing)
         .offset(y: slidIn ? 0 : -(notchSize.height + Self.extraHeight + 4))
-        .onAppear { schedule() }
+        .onAppear {
+            if let path = message.icon {
+                loadedIcon = NSImage(contentsOfFile: path)
+            }
+            schedule()
+        }
         .onDisappear {
             animationTask?.cancel()
             dismissTask?.cancel()
@@ -73,7 +79,7 @@ struct NotchView: View {
                         .foregroundColor(Self.color(named: message.color) ?? .white)
                         .frame(width: 14, height: 14)
                         .opacity(iconVisible ? 1 : 0)
-                } else if let iconPath = message.icon, let img = NSImage(contentsOfFile: iconPath) {
+                } else if let img = loadedIcon {
                     Image(nsImage: img)
                         .resizable()
                         .scaledToFit()
