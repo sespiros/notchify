@@ -64,7 +64,7 @@ final class NotchController {
 
     private func showNow(_ message: Message) {
         guard let geometry = NotchGeometry.current() else {
-            NSLog("notchify: no active built-in notched display, dropping \"\(message.title)\"")
+            NSLog("notchify: no active display, dropping \"\(message.title)\"")
             advanceQueueAfterDrop()
             return
         }
