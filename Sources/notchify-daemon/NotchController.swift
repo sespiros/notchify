@@ -17,6 +17,7 @@ final class NotchController {
     private let panel: NSPanel
     private let hosting: FirstMouseHosting<AnyView>
     private var queue: [Message] = []
+    private var currentMessage: Message?
     private var presenting = false
 
     init() {
@@ -62,25 +63,24 @@ final class NotchController {
     }
 
     private func showNow(_ message: Message) {
+        guard let geometry = NotchGeometry.current() else {
+            NSLog("notchify: no active built-in notched display, dropping \"\(message.title)\"")
+            advanceQueueAfterDrop()
+            return
+        }
+
+        currentMessage = message
         presenting = true
         Sound.play(message.sound)
 
-        // Match macOS Notification Center behavior: render on the primary
-        // display. NSScreen.screens.first is documented as the main display
-        // (the one with the menubar in System Settings → Displays). When
-        // that display has a hardware notch the overlay is flush; on a
-        // notch-less primary the rectangle hangs from the top edge.
-        let screen = NSScreen.screens.first
-            ?? NSScreen.main
-            ?? NSScreen.screens.first!
-        let notchSize = Self.notchSize(for: screen)
+        let notchSize = geometry.notchSize
         let panelWidth = notchSize.width + NotchView.leftExtra
         let panelHeight = notchSize.height + NotchView.extraHeight
 
         // Right edge of the panel pinned to the right edge of the centered notch.
-        let notchRight = screen.frame.midX + notchSize.width / 2
+        let notchRight = geometry.notchRect.maxX
         let originX = notchRight - panelWidth
-        let originY = screen.frame.maxY - panelHeight
+        let originY = geometry.notchRect.maxY - panelHeight
 
         panel.setFrame(
             NSRect(x: originX, y: originY, width: panelWidth, height: panelHeight),
@@ -104,13 +104,23 @@ final class NotchController {
         // Replace with EmptyView so the previous message's SwiftUI state
         // is released and the next show starts clean.
         hosting.rootView = AnyView(EmptyView())
+        currentMessage = nil
         presenting = false
         if !queue.isEmpty {
             let next = queue.removeFirst()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-                self?.showNow(next)
-            }
+            scheduleNext(next)
         }
+    }
+
+    func screenConfigurationDidChange() {
+        guard presenting, let currentMessage else { return }
+
+        panel.orderOut(nil)
+        hosting.rootView = AnyView(EmptyView())
+        self.currentMessage = nil
+        presenting = false
+
+        scheduleNext(currentMessage, delay: .milliseconds(100))
     }
 
     private func runAction(_ action: String?) {
@@ -126,18 +136,20 @@ final class NotchController {
     }
 
     // Generous upper bound used for sizing the persistent panel; actual
-    // sizing per-notification is `notchSize(for:) + NotchView.leftExtra`.
-    private static let maxNotchWidth: CGFloat = 240
+    // sizing per-notification is `NotchGeometry.current()?.notchSize + NotchView.leftExtra`.
+    private static let maxNotchWidth: CGFloat = 320
     private static let maxNotchHeight: CGFloat = 40
 
-    private static func notchSize(for screen: NSScreen) -> CGSize {
-        let height = screen.safeAreaInsets.top
-        if height <= 0 {
-            return CGSize(width: 200, height: 32)
+    private func advanceQueueAfterDrop() {
+        guard !queue.isEmpty else { return }
+        let next = queue.removeFirst()
+        scheduleNext(next)
+    }
+
+    private func scheduleNext(_ message: Message, delay: Duration = .milliseconds(250)) {
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: delay)
+            self?.showNow(message)
         }
-        let envWidth = ProcessInfo.processInfo.environment["NOTCHIFY_NOTCH_WIDTH"]
-            .flatMap { Double($0) }.map { CGFloat($0) }
-        let width = envWidth ?? 178
-        return CGSize(width: width, height: height)
     }
 }

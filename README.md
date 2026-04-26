@@ -67,10 +67,8 @@ See [BUILDING.md](BUILDING.md).
 - Hover: pauses auto-dismiss until you mouse away.
 - Multiple notifications queue and play in order.
 - Focus / Do-Not-Disturb active: drops silently.
-- Always renders on the MacBook display, even with an external monitor.
-
-If the rectangle's width doesn't match your model's notch, calibrate
-with `NOTCHIFY_NOTCH_WIDTH=<points> notchify-daemon` (default 178pt).
+- Renders only when macOS reports an active built-in notched display.
+- Uses macOS screen geometry APIs to anchor the overlay to the built-in notch area, even with an external monitor attached.
 
 ## Nix-darwin
 
