@@ -127,9 +127,9 @@ struct NotchView: View {
             guard !Task.isCancelled else { return }
             withAnimation(.easeIn(duration: 0.12)) { iconVisible = true }
 
-            try? await Task.sleep(for: .milliseconds(500))
+            try? await Task.sleep(for: .milliseconds(250))
             guard !Task.isCancelled else { return }
-            withAnimation(.easeOut(duration: 0.32)) { heightExpanded = true }
+            withAnimation(.easeOut(duration: 0.15)) { heightExpanded = true }
 
             try? await Task.sleep(for: .milliseconds(200))
             guard !Task.isCancelled else { return }
