@@ -18,14 +18,36 @@ state="${1:-}"
 [ -n "${TMUX_PANE:-}" ] || exit 0
 command -v tmux >/dev/null || exit 0
 
+current=$(tmux show-options -wv -t "$TMUX_PANE" @agent_state 2>/dev/null || true)
+
 case "$state" in
   release|"")
     tmux set-option -w -t "$TMUX_PANE" -u @agent_state >/dev/null 2>&1 || true
     exit 0 ;;
   working)
-    tmux set-option -w -t "$TMUX_PANE" @agent_state working >/dev/null 2>&1 || true
+    # PreToolUse on the Agent tool with run_in_background:true marks the
+    # pane as "background" (a separate dot color). It stays that way
+    # through subsequent working ticks (so you can tell at a glance
+    # Claude is idle but a subagent is still in flight) until the next
+    # UserPromptSubmit clears it back to plain working.
+    payload=$(cat 2>/dev/null || true)
+    if printf %s "$payload" | grep -q '"hook_event_name":"UserPromptSubmit"'; then
+      tmux set-option -w -t "$TMUX_PANE" @agent_state working >/dev/null 2>&1 || true
+      exit 0
+    fi
+    if printf %s "$payload" | grep -q '"tool_name":"Agent"' &&
+       printf %s "$payload" | grep -q '"run_in_background":[[:space:]]*true'; then
+      tmux set-option -w -t "$TMUX_PANE" @agent_state background >/dev/null 2>&1 || true
+      exit 0
+    fi
+    [ "$current" = background ] || \
+      tmux set-option -w -t "$TMUX_PANE" @agent_state working >/dev/null 2>&1 || true
     exit 0 ;;
   idle|blocked)
+    # Don't downgrade purple→green on Stop; a background agent is still live.
+    if [ "$state" = idle ] && [ "$current" = background ]; then
+      exit 0
+    fi
     tmux set-option -w -t "$TMUX_PANE" @agent_state "$state" >/dev/null 2>&1 || true ;;
   *) exit 0 ;;
 esac

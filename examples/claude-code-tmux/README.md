@@ -44,10 +44,11 @@ or asks for permission, with per-window tmux state.
 ## tmux companion
 
 The hook sets `@agent_state` on the tmux window. To render a per-tab
-dot for `working` (yellow) / `idle` (green) / `blocked` (red), add to
-your tmux config:
+dot for `working` (yellow) / `idle` (green) / `blocked` (red) /
+`background` (purple, when a `run_in_background:true` Agent is in
+flight), add to your tmux config:
 
 ```tmux
-set -g window-status-format         '#I: #{?#{==:#{@agent_state},working},#[fg=colour136]●#[default] ,#{?#{==:#{@agent_state},idle},#[fg=colour64]●#[default] ,#{?#{==:#{@agent_state},blocked},#[fg=colour160]●#[default] ,}}}#W#{?window_flags,#{window_flags}, }'
-set -g window-status-current-format '#I: #{?#{==:#{@agent_state},working},#[fg=colour136]●#[default] ,#{?#{==:#{@agent_state},idle},#[fg=colour64]●#[default] ,#{?#{==:#{@agent_state},blocked},#[fg=colour160]●#[default] ,}}}#W#{?window_flags,#{window_flags}, }'
+set -g window-status-format         '#I: #{?#{==:#{@agent_state},working},#[fg=colour136]●#[default] ,#{?#{==:#{@agent_state},idle},#[fg=colour64]●#[default] ,#{?#{==:#{@agent_state},blocked},#[fg=colour160]●#[default] ,#{?#{==:#{@agent_state},background},#[fg=colour93]●#[default] ,}}}}#W#{?window_flags,#{window_flags}, }'
+set -g window-status-current-format '#I: #{?#{==:#{@agent_state},working},#[fg=colour136]●#[default] ,#{?#{==:#{@agent_state},idle},#[fg=colour64]●#[default] ,#{?#{==:#{@agent_state},blocked},#[fg=colour160]●#[default] ,#{?#{==:#{@agent_state},background},#[fg=colour93]●#[default] ,}}}}#W#{?window_flags,#{window_flags}, }'
 ```
