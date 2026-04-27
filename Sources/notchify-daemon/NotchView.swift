@@ -16,7 +16,7 @@ struct NotchView: View {
     @State private var isDismissing = false
 
     static let leftExtra: CGFloat = 31       // shelf width past notch's left edge in phase 1
-    static let extraHeight: CGFloat = 44     // phase-2 height (a bit more than 2x notch for breathing room)
+    static let extraHeight: CGFloat = 48     // phase-2 height (a bit more than 2x notch for breathing room)
 
     var body: some View {
         let frameWidth = notchSize.width + (widthExpanded ? Self.leftExtra : 0)
@@ -102,9 +102,13 @@ struct NotchView: View {
                     .font(.system(size: 11))
                     .foregroundColor(.white.opacity(0.7))
                     .lineLimit(2)
+                    .truncationMode(.tail)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, 10)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .padding(.top, 1)
+            .padding(.bottom, 4)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .opacity(textVisible ? 1 : 0)
         }
     }
