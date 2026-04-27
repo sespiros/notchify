@@ -22,9 +22,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             forName: NSApplication.didChangeScreenParametersNotification,
             object: nil,
             queue: nil
-        ) { [weak self] _ in
+        ) { [weak controller] _ in
             Task { @MainActor in
-                self?.controller.screenConfigurationDidChange()
+                controller?.screenConfigurationDidChange()
             }
         }
         do {
