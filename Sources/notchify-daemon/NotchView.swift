@@ -104,12 +104,14 @@ struct NotchView: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.white)
                     .lineLimit(1)
-                Text(message.text)
-                    .font(.system(size: 11))
-                    .foregroundColor(.white.opacity(0.7))
-                    .lineLimit(2)
-                    .truncationMode(.tail)
-                    .fixedSize(horizontal: false, vertical: true)
+                if let body = message.text, !body.isEmpty {
+                    Text(body)
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.7))
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .padding(.horizontal, 10)
             .padding(.top, 1)

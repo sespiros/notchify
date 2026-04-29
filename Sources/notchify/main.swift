@@ -1,7 +1,7 @@
 import Foundation
 
 func usage() -> Never {
-    FileHandle.standardError.write("usage: notchify -title <s> -text <s> [-icon <path>] [-symbol <SFSymbolName>] [-color <orange|red|blue|...>] [-sound <ready|warning|info|success|error|<SystemSoundName>>] [-action <url|shell-command>] [-timeout <seconds>]\n".data(using: .utf8)!)
+    FileHandle.standardError.write("usage: notchify [options] <title> [body]\n  options: [-icon <path>] [-symbol <SFSymbolName>] [-color <orange|red|blue|...>] [-sound <ready|warning|info|success|error|<SystemSoundName>>] [-action <url|shell-command>] [-timeout <seconds>]\n  legacy: -title <s> and -text <s> are still accepted as aliases\n".data(using: .utf8)!)
     exit(2)
 }
 
@@ -13,6 +13,7 @@ var color: String?
 var sound: String?
 var action: String?
 var timeout: Double?
+var positionals: [String] = []
 
 var args = Array(CommandLine.arguments.dropFirst())
 while !args.isEmpty {
@@ -45,15 +46,24 @@ while !args.isEmpty {
     case "-h", "--help":
         usage()
     default:
-        usage()
+        if flag.hasPrefix("-") { usage() }
+        positionals.append(flag)
     }
 }
 
-guard let title, let text else { usage() }
+if title == nil, !positionals.isEmpty {
+    title = positionals.removeFirst()
+}
+if text == nil, !positionals.isEmpty {
+    text = positionals.removeFirst()
+}
+if !positionals.isEmpty { usage() }
+
+guard let title else { usage() }
 
 struct Payload: Codable {
     let title: String
-    let text: String
+    let text: String?
     let icon: String?
     let symbol: String?
     let color: String?

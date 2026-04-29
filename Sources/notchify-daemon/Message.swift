@@ -2,7 +2,7 @@ import Foundation
 
 struct Message: Codable {
     let title: String
-    let text: String
+    let text: String?
     let icon: String?
     let symbol: String?    // SF Symbol name; preferred over icon when set
     let color: String?     // SF Symbol tint: orange, red, blue, etc.

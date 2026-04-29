@@ -15,17 +15,21 @@
 ## Use
 
 ```sh
-notchify -title "Done"     -text "build succeeded"      -sound ready
-notchify -title "Heads up" -text "deploy needs input"   -sound warning -symbol exclamationmark.triangle.fill -color orange
-notchify -title "Open"     -text "tap me"               -action https://example.com
+notchify "Done" "build succeeded"    -sound ready
+notchify "Heads up" "deploy needs input" -sound warning -symbol exclamationmark.triangle.fill -color orange
+notchify "Open" "tap me"             -action https://example.com
+notchify "Title only"                                  # body is optional
 ```
+
+Positional args are `<title> [body]`, mirroring Linux's `notify-send`.
+The legacy `-title` / `-text` flags are still accepted as aliases.
 
 ## Flags
 
 | flag | meaning |
 |------|---------|
-| `-title <s>` | title (required) |
-| `-text <s>` | subtitle (required) |
+| `-title <s>` | title (alias for first positional) |
+| `-text <s>` | subtitle (alias for second positional, optional) |
 | `-symbol <name>` | SF Symbol name |
 | `-color <name>` | tint for `-symbol` (orange/red/blue/...) |
 | `-icon <path>` | image file (used if no `-symbol`) |
