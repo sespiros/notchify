@@ -16,12 +16,15 @@ out of the MacBook camera notch on the built-in display, plus a CLI
 - macOS 13+ and full Xcode 15+. Command Line Tools alone aren't
   enough; the project needs Xcode's `MacOSX.sdk` and the Swift 5.9+
   toolchain that ships with `Xcode.app`.
-- Always set `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`
-  and `unset SDKROOT` before `swift build`. nix-darwin and other
-  environments inject an SDK that won't match Xcode's compiler;
-  symptoms are `no such module 'SwiftShims'` or
-  "SDK is not supported by the compiler".
-- `scripts/package.sh` does the right thing automatically.
+- Plain `swift build` works as long as `xcode-select -p` points at a
+  full Xcode install. If you have multiple Xcodes and need a specific
+  one, set `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`
+  and `unset SDKROOT` before invoking. Symptoms of a wrong toolchain:
+  `no such module 'SwiftShims'` or "SDK is not supported by the
+  compiler".
+- `scripts/package.sh` and the flake derivation pin
+  `DEVELOPER_DIR=/Applications/Xcode.app/...` for reproducible release
+  builds, regardless of the user's `xcode-select` default.
 
 ## Nix-darwin / flake notes
 
