@@ -101,7 +101,11 @@
               "${cfg.package}/Applications/Notchify.app/Contents/MacOS/notchify-daemon"
             ];
             RunAtLoad = true;
-            KeepAlive = true;
+            # KeepAlive on SuccessfulExit=false: launchd respawns
+            # only when the daemon crashes (non-zero exit). A clean
+            # Quit from the menubar (NSApp.terminate → exit 0) is
+            # respected and stays stopped.
+            KeepAlive = { SuccessfulExit = false; };
             StandardOutPath = "/tmp/notchify-daemon.out.log";
             StandardErrorPath = "/tmp/notchify-daemon.err.log";
           };
