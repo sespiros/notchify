@@ -35,7 +35,13 @@ The legacy `-title` / `-text` flags are still accepted as aliases.
 | `-icon <path>` | image file (used if no `-symbol`) |
 | `-sound <name>` | `ready` / `warning` / `info` / `success` / `error`, or any name from `/System/Library/Sounds/` |
 | `-action <url\|cmd>` | URL opened or shell command run on tap |
+| `-focus` | shorthand for an `-action` that raises the source terminal app and (when run inside tmux) jumps to the originating pane; mutually exclusive with `-action` |
 | `-timeout <secs>` | auto-dismiss seconds (default 5) |
+
+`-focus` auto-detects the terminal app
+(Ghostty, iTerm, Terminal, WezTerm, kitty, ...).
+Set `NOTCHIFY_TERMINAL_BUNDLE` to override the detection
+(e.g. `NOTCHIFY_TERMINAL_BUNDLE=com.github.wez.wezterm`).
 
 ## Motivation
 

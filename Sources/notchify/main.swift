@@ -1,7 +1,7 @@
 import Foundation
 
 func usage() -> Never {
-    FileHandle.standardError.write("usage: notchify [options] <title> [body]\n  options: [-icon <path>] [-symbol <SFSymbolName>] [-color <orange|red|blue|...>] [-sound <ready|warning|info|success|error|<SystemSoundName>>] [-action <url|shell-command>] [-timeout <seconds>]\n  legacy: -title <s> and -text <s> are still accepted as aliases\n".data(using: .utf8)!)
+    FileHandle.standardError.write("usage: notchify [options] <title> [body]\n  options: [-icon <path>] [-symbol <SFSymbolName>] [-color <orange|red|blue|...>] [-sound <ready|warning|info|success|error|<SystemSoundName>>] [-action <url|shell-command>] [-focus] [-timeout <seconds>]\n  legacy: -title <s> and -text <s> are still accepted as aliases\n  -focus is incompatible with -action; it builds a click action that\n  raises the source terminal app and (when in tmux) jumps to the\n  originating pane. Override the auto-detected terminal with the\n  NOTCHIFY_TERMINAL_BUNDLE env var. See Sources/notchify/Focus/ for\n  how to add support for a new terminal or multiplexer.\n".data(using: .utf8)!)
     exit(2)
 }
 
@@ -12,6 +12,7 @@ var symbol: String?
 var color: String?
 var sound: String?
 var action: String?
+var focus: Bool = false
 var timeout: Double?
 var positionals: [String] = []
 
@@ -40,6 +41,8 @@ while !args.isEmpty {
     case "-action":
         guard !args.isEmpty else { usage() }
         action = args.removeFirst()
+    case "-focus":
+        focus = true
     case "-timeout":
         guard !args.isEmpty, let v = Double(args.removeFirst()) else { usage() }
         timeout = v
@@ -60,6 +63,19 @@ if text == nil, !positionals.isEmpty {
 if !positionals.isEmpty { usage() }
 
 guard let title else { usage() }
+
+if focus {
+    if action != nil {
+        FileHandle.standardError.write("notchify: -focus and -action are mutually exclusive\n".data(using: .utf8)!)
+        exit(2)
+    }
+    let env = ProcessInfo.processInfo.environment
+    if let built = buildFocusAction(env: env) {
+        action = built
+    } else {
+        FileHandle.standardError.write("notchify: -focus requested but no terminal or tmux context detected; ignoring\n".data(using: .utf8)!)
+    }
+}
 
 struct Payload: Codable {
     let title: String

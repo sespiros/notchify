@@ -35,8 +35,7 @@ case "$state" in
       tmux set-option -w -t "$TMUX_PANE" @agent_state working >/dev/null 2>&1 || true
       exit 0
     fi
-    if printf %s "$payload" | grep -q '"tool_name":"Agent"' &&
-       printf %s "$payload" | grep -q '"run_in_background":[[:space:]]*true'; then
+    if printf %s "$payload" | grep -q '"run_in_background":[[:space:]]*true'; then
       tmux set-option -w -t "$TMUX_PANE" @agent_state background >/dev/null 2>&1 || true
       exit 0
     fi
@@ -52,8 +51,27 @@ case "$state" in
   *) exit 0 ;;
 esac
 
-# Skip the notification when the affected pane is the focused one.
-[ "$(tmux display-message -p '#{pane_id}')" != "$TMUX_PANE" ] || exit 0
+# Skip the notification when the user is actually looking at this pane.
+# The check has two layers:
+#   1. tmux says this pane is the active pane in the active window
+#      (and, if zoomed, that the zoomed pane is ours too).
+#   2. On macOS under AeroSpace, the focused window's title also
+#      matches this pane's session name. The set-titles-string in
+#      examples/claude-code-tmux/README.md is '#S (#{s|/dev/||:client_tty})',
+#      so we strip the trailing ' (...)' annotation before comparing.
+# If aerospace isn't installed we fall back to the tmux-only check.
+visible=$(tmux display-message -pt "$TMUX_PANE" '#{&&:#{window_active},#{?window_zoomed_flag,#{pane_active},1}}' 2>/dev/null || echo 0)
+[ "$visible" = "1" ] || visible=0
+if [ "$visible" = "1" ]; then
+  if command -v aerospace >/dev/null 2>&1; then
+    session=$(tmux display-message -pt "$TMUX_PANE" '#{session_name}' 2>/dev/null || true)
+    front=$(aerospace list-windows --focused --format '%{window-title}' 2>/dev/null | head -1 || true)
+    front_session="${front%% (*}"
+    [ -n "$session" ] && [ "$front_session" = "$session" ] && exit 0
+  else
+    exit 0
+  fi
+fi
 command -v notchify >/dev/null || exit 0
 
 # Pull /rename session name out of Claude's transcript via grep+sed.
@@ -72,8 +90,10 @@ fi
 
 if [ "$state" = blocked ]; then
   notchify -title "$title" -text "$body" -sound warning \
-           -symbol exclamationmark.triangle.fill -color orange &
+           -symbol exclamationmark.triangle.fill -color orange \
+           -focus &
 else
   notchify -title "$title" -text "$body" -sound ready \
-           -symbol checkmark.circle.fill -color green &
+           -symbol checkmark.circle.fill -color green \
+           -focus &
 fi
