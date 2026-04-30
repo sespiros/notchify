@@ -1,71 +1,40 @@
 import Foundation
 
+/// Short one-liner shown on bad args. The full options list lives
+/// in `help()`, reachable via `-h` / `--help`.
 func usage() -> Never {
-    let text = """
-usage: notchify [options] <title> [body]
-
-Visuals
-  -icon <name|path>        Image shown in the notch.
-                           Examples: bell.fill, checkmark.circle (any
-                           SF Symbol name); /Users/me/claude.png,
-                           ~/icons/build.png (any image file).
-                           Default: bell.fill
-
-  -color <name>            Tint applied to SF Symbol icons (ignored
-                           for image-file icons).
-                           Examples: orange, red, yellow, green, blue,
-                           purple, pink, white, gray.
-                           Default: white
-
-Sound
-  -sound <name>            Sound to play on arrival.
-                           Examples: ready, warning, info, success,
-                           error, or any name from
-                           /System/Library/Sounds/ (Glass, Ping, ...).
-                           Default: silent
-
-Action
-  -action <url|command>    Run on click. URL opens in default browser;
-                           shell command runs under sh -c.
-                           Examples: https://example.com,
-                           "open -a 'Visual Studio Code'".
-                           Default: click only dismisses, no action
-
-  -focus                   Shorthand for -action that raises the
-                           source terminal app and (when run inside
-                           tmux) jumps to the originating pane.
-                           Mutually exclusive with -action. Implies
-                           -timeout 0 unless -timeout is given.
-                           Override the auto-detected terminal with
-                           the NOTCHIFY_TERMINAL_BUNDLE env var.
-
-Lifetime
-  -timeout <seconds>       Auto-dismiss after N seconds.
-                           Examples: 3 (auto-dismiss in 3s), 0
-                           (persistent, stays in chip until clicked).
-                           Default: 5
-
-Grouping
-  -group <name>            Stack notifications under a named chip on
-                           the notch shelf. Repeated calls with the
-                           same -group collapse into one chip with a
-                           count badge; hover the chip to see the
-                           full list.
-                           Examples: claude, build, alerts.
-                           Default: each notification gets a separate
-                                    transient chip ("anonymous")
-
-Examples
-  notchify "Done" "build succeeded"
-  notchify "Heads up" "deploy needs input" \\
-           -icon exclamationmark.triangle.fill -color orange
-  notchify "Open" "tap me" -action https://example.com
-  notchify "Build done" "ready to commit" \\
-           -group claude -icon ~/icons/claude.png
-
-"""
+    let text = "usage: notchify <title> [body] [options] (run 'notchify -h' for full help)\n"
     FileHandle.standardError.write(text.data(using: .utf8)!)
     exit(2)
+}
+
+/// Full help, only shown when the user explicitly asks via -h/--help.
+func help() -> Never {
+    let text = """
+usage: notchify <title> [body] [options]
+
+  -icon <name|path>   SF Symbol or image file (default: bell.fill)
+                      e.g. checkmark.circle.fill, ~/icons/claude.png
+  -color <name>       tint for SF Symbol icons (default: white)
+                      orange, red, yellow, green, blue, purple, pink, gray
+  -sound <name>       ready | warning | info | success | error
+                      or any name from /System/Library/Sounds/ (default: silent)
+  -action <url|cmd>   URL opened or shell command run on click
+  -focus              raise source terminal / jump to tmux pane on click
+                      (mutually exclusive with -action; implies -timeout 0)
+  -timeout <secs>     auto-dismiss after N seconds, 0 = persistent (default: 5)
+  -group <name>       stack notifications under a named chip;
+                      icon/color come from the first arrival in the group
+
+Examples:
+  notchify "Done" "build succeeded"
+  notchify "Heads up" "deploy needs input" -icon exclamationmark.triangle.fill -color orange
+  notchify "Open" "tap me" -action https://example.com
+  notchify "Build done" "ready to commit" -group claude -icon ~/icons/claude.png
+
+"""
+    FileHandle.standardOutput.write(text.data(using: .utf8)!)
+    exit(0)
 }
 
 var title: String?
@@ -104,7 +73,7 @@ while !args.isEmpty {
         guard !args.isEmpty else { usage() }
         group = args.removeFirst()
     case "-h", "--help":
-        usage()
+        help()
     default:
         if flag.hasPrefix("-") { usage() }
         positionals.append(flag)
