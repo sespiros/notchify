@@ -234,10 +234,10 @@ final class NotchController {
         let m = notification.message
         var stack = stacks[id]!
         if stack.resolvedIcon == nil {
-            stack.resolvedIcon = m.groupIcon ?? m.symbol
+            stack.resolvedIcon = m.icon
         }
         if stack.resolvedColor == nil {
-            stack.resolvedColor = m.groupColor ?? m.color
+            stack.resolvedColor = m.color
         }
         stack.notifications.insert(notification, at: 0)
         stacks[id] = stack

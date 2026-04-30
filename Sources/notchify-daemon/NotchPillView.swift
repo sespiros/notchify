@@ -289,8 +289,6 @@ struct NotchPillView: View {
                         ForEach(hs.notifications) { n in
                             RowView(
                                 notification: n,
-                                fallbackIcon: hs.resolvedIcon,
-                                fallbackColor: hs.resolvedColor,
                                 onClick: { onRowClick(n) }
                             )
                             .frame(height: Self.rowHeight)
@@ -462,6 +460,40 @@ struct NotchPillView: View {
         return icons + gaps + shelfPaddingLeft + shelfPaddingRight
     }
 
+    /// Render an icon spec as an Image. The spec is either an SF
+    /// Symbol name (e.g. "bell.fill") or a file path (starts with "/"
+    /// or "~"). For SF Symbols, the tint comes from `colorName`; for
+    /// image files, color is ignored (the file paints itself).
+    @ViewBuilder
+    static func iconImage(
+        _ spec: String?,
+        colorName: String?,
+        size: CGFloat
+    ) -> some View {
+        let resolved = spec ?? "bell.fill"
+        if isFilePath(resolved),
+           let img = NSImage(contentsOfFile: expandTilde(resolved)) {
+            Image(nsImage: img)
+                .resizable()
+                .scaledToFit()
+                .frame(width: size, height: size)
+        } else {
+            Image(systemName: isFilePath(resolved) ? "bell.fill" : resolved)
+                .resizable()
+                .scaledToFit()
+                .foregroundColor(color(named: colorName) ?? .white)
+                .frame(width: size, height: size)
+        }
+    }
+
+    private static func isFilePath(_ s: String) -> Bool {
+        return s.hasPrefix("/") || s.hasPrefix("~")
+    }
+
+    private static func expandTilde(_ s: String) -> String {
+        return (s as NSString).expandingTildeInPath
+    }
+
     /// Map a string name to a SwiftUI Color. Shared by the slot
     /// renderer and the row renderer so the chip color and the
     /// row-icon color come from the same vocabulary.
@@ -519,12 +551,12 @@ struct SlotIconView: View {
             // Icon centered in the slot; chevron is positioned via
             // offset so adding/removing it doesn't shift the icon
             // off-center.
-            Image(systemName: stack.resolvedIcon ?? "bell.fill")
-                .resizable()
-                .scaledToFit()
-                .foregroundColor(NotchPillView.color(named: stack.resolvedColor) ?? .white)
-                .frame(width: 14, height: 14)
-                .frame(width: NotchPillView.slotWidth, height: notchHeight)
+            NotchPillView.iconImage(
+                stack.resolvedIcon,
+                colorName: stack.resolvedColor,
+                size: 14
+            )
+            .frame(width: NotchPillView.slotWidth, height: notchHeight)
 
             Image(systemName: "chevron.down")
                 .font(.system(size: 7, weight: .bold))
@@ -550,11 +582,6 @@ struct SlotIconView: View {
 /// the notification didn't supply its own.
 struct RowView: View {
     let notification: StoredNotification
-    /// Kept for API compatibility but no longer rendered: rows used
-    /// to show their own icon, but we now identify rows by their
-    /// stack's slot icon (with a chevron when the stack is expanded).
-    let fallbackIcon: String?
-    let fallbackColor: String?
     var onClick: () -> Void
 
     var body: some View {

@@ -1,40 +1,91 @@
 import Foundation
 
 func usage() -> Never {
-    FileHandle.standardError.write("usage: notchify [options] <title> [body]\n  options: [-icon <path>] [-symbol <SFSymbolName>] [-color <orange|red|blue|...>] [-sound <ready|warning|info|success|error|<SystemSoundName>>] [-action <url|shell-command>] [-focus] [-timeout <seconds>] [-group <name>] [-group-icon <SFSymbolName>] [-group-color <color>]\n  legacy: -title <s> and -text <s> are still accepted as aliases\n  -focus is incompatible with -action; it builds a click action that\n  raises the source terminal app and (when in tmux) jumps to the\n  originating pane. It also implies -timeout 0 and attaches a dismiss\n  key so the daemon can clear the notification once the user visits\n  its source. Override the auto-detected terminal with the\n  NOTCHIFY_TERMINAL_BUNDLE env var. See Sources/notchify/Focus/ for\n  how to add support for a new terminal or multiplexer.\n  -timeout 0 makes the notification persist until clicked (or\n  focus-dismissed when -focus is set).\n  -group stacks notifications under a named chip on the notch; chip\n  icon/color fall back to the notification's own -symbol/-color.\n".data(using: .utf8)!)
+    let text = """
+usage: notchify [options] <title> [body]
+
+Visuals
+  -icon <name|path>        Image shown in the notch.
+                           Examples: bell.fill, checkmark.circle (any
+                           SF Symbol name); /Users/me/claude.png,
+                           ~/icons/build.png (any image file).
+                           Default: bell.fill
+
+  -color <name>            Tint applied to SF Symbol icons (ignored
+                           for image-file icons).
+                           Examples: orange, red, yellow, green, blue,
+                           purple, pink, white, gray.
+                           Default: white
+
+Sound
+  -sound <name>            Sound to play on arrival.
+                           Examples: ready, warning, info, success,
+                           error, or any name from
+                           /System/Library/Sounds/ (Glass, Ping, ...).
+                           Default: silent
+
+Action
+  -action <url|command>    Run on click. URL opens in default browser;
+                           shell command runs under sh -c.
+                           Examples: https://example.com,
+                           "open -a 'Visual Studio Code'".
+                           Default: click only dismisses, no action
+
+  -focus                   Shorthand for -action that raises the
+                           source terminal app and (when run inside
+                           tmux) jumps to the originating pane.
+                           Mutually exclusive with -action. Implies
+                           -timeout 0 unless -timeout is given.
+                           Override the auto-detected terminal with
+                           the NOTCHIFY_TERMINAL_BUNDLE env var.
+
+Lifetime
+  -timeout <seconds>       Auto-dismiss after N seconds.
+                           Examples: 3 (auto-dismiss in 3s), 0
+                           (persistent, stays in chip until clicked).
+                           Default: 5
+
+Grouping
+  -group <name>            Stack notifications under a named chip on
+                           the notch shelf. Repeated calls with the
+                           same -group collapse into one chip with a
+                           count badge; hover the chip to see the
+                           full list.
+                           Examples: claude, build, alerts.
+                           Default: each notification gets a separate
+                                    transient chip ("anonymous")
+
+Examples
+  notchify "Done" "build succeeded"
+  notchify "Heads up" "deploy needs input" \\
+           -icon exclamationmark.triangle.fill -color orange
+  notchify "Open" "tap me" -action https://example.com
+  notchify "Build done" "ready to commit" \\
+           -group claude -icon ~/icons/claude.png
+
+"""
+    FileHandle.standardError.write(text.data(using: .utf8)!)
     exit(2)
 }
 
 var title: String?
 var text: String?
 var icon: String?
-var symbol: String?
 var color: String?
 var sound: String?
 var action: String?
 var focus: Bool = false
 var timeout: Double?
 var group: String?
-var groupIcon: String?
-var groupColor: String?
 var positionals: [String] = []
 
 var args = Array(CommandLine.arguments.dropFirst())
 while !args.isEmpty {
     let flag = args.removeFirst()
     switch flag {
-    case "-title":
-        guard !args.isEmpty else { usage() }
-        title = args.removeFirst()
-    case "-text":
-        guard !args.isEmpty else { usage() }
-        text = args.removeFirst()
     case "-icon":
         guard !args.isEmpty else { usage() }
         icon = args.removeFirst()
-    case "-symbol":
-        guard !args.isEmpty else { usage() }
-        symbol = args.removeFirst()
     case "-color":
         guard !args.isEmpty else { usage() }
         color = args.removeFirst()
@@ -52,12 +103,6 @@ while !args.isEmpty {
     case "-group":
         guard !args.isEmpty else { usage() }
         group = args.removeFirst()
-    case "-group-icon":
-        guard !args.isEmpty else { usage() }
-        groupIcon = args.removeFirst()
-    case "-group-color":
-        guard !args.isEmpty else { usage() }
-        groupColor = args.removeFirst()
     case "-h", "--help":
         usage()
     default:
@@ -66,10 +111,10 @@ while !args.isEmpty {
     }
 }
 
-if title == nil, !positionals.isEmpty {
+if !positionals.isEmpty {
     title = positionals.removeFirst()
 }
-if text == nil, !positionals.isEmpty {
+if !positionals.isEmpty {
     text = positionals.removeFirst()
 }
 if !positionals.isEmpty { usage() }
@@ -91,9 +136,7 @@ if focus {
     dismissKey = result.dismissKey
     // -focus implies persist: the notification keeps a row in its
     // stack after the in-flight retracts, ready to be dismissed
-    // when the user visits the source. The in-flight body itself
-    // still auto-retracts after the persistent dwell (4s in the
-    // daemon) — only the row's lifetime is extended.
+    // when the user visits the source.
     if timeout == nil {
         timeout = 0
     }
@@ -103,28 +146,22 @@ struct Payload: Codable {
     let title: String
     let text: String?
     let icon: String?
-    let symbol: String?
     let color: String?
     let sound: String?
     let action: String?
     let timeout: Double?
     let group: String?
-    let groupIcon: String?
-    let groupColor: String?
     let dismissKey: DismissKeyPayload?
 }
 let payload = Payload(
     title: title,
     text: text,
     icon: icon,
-    symbol: symbol,
     color: color,
     sound: sound,
     action: action,
     timeout: timeout,
     group: group,
-    groupIcon: groupIcon,
-    groupColor: groupColor,
     dismissKey: dismissKey
 )
 let data = try JSONEncoder().encode(payload)
