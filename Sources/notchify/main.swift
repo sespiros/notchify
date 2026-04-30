@@ -1,7 +1,7 @@
 import Foundation
 
 func usage() -> Never {
-    FileHandle.standardError.write("usage: notchify [options] <title> [body]\n  options: [-icon <path>] [-symbol <SFSymbolName>] [-color <orange|red|blue|...>] [-sound <ready|warning|info|success|error|<SystemSoundName>>] [-action <url|shell-command>] [-focus] [-timeout <seconds>]\n  legacy: -title <s> and -text <s> are still accepted as aliases\n  -focus is incompatible with -action; it builds a click action that\n  raises the source terminal app and (when in tmux) jumps to the\n  originating pane. Override the auto-detected terminal with the\n  NOTCHIFY_TERMINAL_BUNDLE env var. See Sources/notchify/Focus/ for\n  how to add support for a new terminal or multiplexer.\n".data(using: .utf8)!)
+    FileHandle.standardError.write("usage: notchify [options] <title> [body]\n  options: [-icon <path>] [-symbol <SFSymbolName>] [-color <orange|red|blue|...>] [-sound <ready|warning|info|success|error|<SystemSoundName>>] [-action <url|shell-command>] [-focus] [-timeout <seconds>] [-group <name>] [-group-icon <SFSymbolName>] [-group-color <color>]\n  legacy: -title <s> and -text <s> are still accepted as aliases\n  -focus is incompatible with -action; it builds a click action that\n  raises the source terminal app and (when in tmux) jumps to the\n  originating pane. It also implies -timeout 0 and attaches a dismiss\n  key so the daemon can clear the notification once the user visits\n  its source. Override the auto-detected terminal with the\n  NOTCHIFY_TERMINAL_BUNDLE env var. See Sources/notchify/Focus/ for\n  how to add support for a new terminal or multiplexer.\n  -timeout 0 makes the notification persist until clicked (or\n  focus-dismissed when -focus is set).\n  -group stacks notifications under a named chip on the notch; chip\n  icon/color fall back to the notification's own -symbol/-color.\n".data(using: .utf8)!)
     exit(2)
 }
 
@@ -14,6 +14,9 @@ var sound: String?
 var action: String?
 var focus: Bool = false
 var timeout: Double?
+var group: String?
+var groupIcon: String?
+var groupColor: String?
 var positionals: [String] = []
 
 var args = Array(CommandLine.arguments.dropFirst())
@@ -46,6 +49,15 @@ while !args.isEmpty {
     case "-timeout":
         guard !args.isEmpty, let v = Double(args.removeFirst()) else { usage() }
         timeout = v
+    case "-group":
+        guard !args.isEmpty else { usage() }
+        group = args.removeFirst()
+    case "-group-icon":
+        guard !args.isEmpty else { usage() }
+        groupIcon = args.removeFirst()
+    case "-group-color":
+        guard !args.isEmpty else { usage() }
+        groupColor = args.removeFirst()
     case "-h", "--help":
         usage()
     default:
@@ -64,16 +76,26 @@ if !positionals.isEmpty { usage() }
 
 guard let title else { usage() }
 
+var dismissKey: DismissKeyPayload? = nil
 if focus {
     if action != nil {
         FileHandle.standardError.write("notchify: -focus and -action are mutually exclusive\n".data(using: .utf8)!)
         exit(2)
     }
     let env = ProcessInfo.processInfo.environment
-    if let built = buildFocusAction(env: env) {
-        action = built
-    } else {
+    let result = buildFocus(env: env)
+    if result.action == nil && result.dismissKey == nil {
         FileHandle.standardError.write("notchify: -focus requested but no terminal or tmux context detected; ignoring\n".data(using: .utf8)!)
+    }
+    action = result.action
+    dismissKey = result.dismissKey
+    // -focus implies persist: the notification keeps a row in its
+    // stack after the in-flight retracts, ready to be dismissed
+    // when the user visits the source. The in-flight body itself
+    // still auto-retracts after the persistent dwell (4s in the
+    // daemon) — only the row's lifetime is extended.
+    if timeout == nil {
+        timeout = 0
     }
 }
 
@@ -86,8 +108,25 @@ struct Payload: Codable {
     let sound: String?
     let action: String?
     let timeout: Double?
+    let group: String?
+    let groupIcon: String?
+    let groupColor: String?
+    let dismissKey: DismissKeyPayload?
 }
-let payload = Payload(title: title, text: text, icon: icon, symbol: symbol, color: color, sound: sound, action: action, timeout: timeout)
+let payload = Payload(
+    title: title,
+    text: text,
+    icon: icon,
+    symbol: symbol,
+    color: color,
+    sound: sound,
+    action: action,
+    timeout: timeout,
+    group: group,
+    groupIcon: groupIcon,
+    groupColor: groupColor,
+    dismissKey: dismissKey
+)
 let data = try JSONEncoder().encode(payload)
 
 let path = "/tmp/notchify.sock"

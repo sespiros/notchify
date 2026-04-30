@@ -58,10 +58,28 @@ let registeredFocusProviders: [FocusProvider] = [
     TmuxFocusProvider(),
 ]
 
-/// Build the click-action shell string for -focus. Returns nil when
-/// no provider applied, in which case main() emits a warning and the
-/// notification fires without an action.
-func buildFocusAction(env: [String: String]) -> String? {
+/// Result of `-focus` resolution.
+/// `action` is the shell command that runs on click (raise window,
+/// jump to pane). `dismissKey` is the fingerprint the daemon uses
+/// to auto-dismiss when the user visits the source. Either may be
+/// nil independently, though in practice they go together.
+struct FocusResult {
+    let action: String?
+    let dismissKey: DismissKeyPayload?
+}
+
+/// CLI-side mirror of the daemon's `DismissKey`. Kept separate so
+/// the two binaries don't have to share a module.
+struct DismissKeyPayload: Codable {
+    let bundle: String
+    let tmuxPane: String?
+}
+
+/// Build the click-action shell string and dismiss-key for `-focus`.
+/// Returns a result whose fields are nil when nothing applied; main()
+/// emits a warning in that case and the notification fires without
+/// either piece.
+func buildFocus(env: [String: String]) -> FocusResult {
     let context = FocusContext.resolve(env: env)
     var seen: Set<FocusCategory> = []
     var parts: [String] = []
@@ -72,5 +90,13 @@ func buildFocusAction(env: [String: String]) -> String? {
             seen.insert(provider.category)
         }
     }
-    return parts.isEmpty ? nil : parts.joined(separator: "; ")
+    let action = parts.isEmpty ? nil : parts.joined(separator: "; ")
+
+    var key: DismissKeyPayload? = nil
+    if let bundle = context.detectedBundle {
+        let pane = env["TMUX_PANE"].flatMap { $0.isEmpty ? nil : $0 }
+        key = DismissKeyPayload(bundle: bundle, tmuxPane: pane)
+    }
+
+    return FocusResult(action: action, dismissKey: key)
 }

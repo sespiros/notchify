@@ -81,10 +81,50 @@ out of the MacBook camera notch on the built-in display, plus a CLI
 ## Animation timeline
 
 Default lifetime is 5s (matches macOS native banner dwell). Each
-notification:
+notification's lifecycle uses six labelled phases:
 
-- Slide-in + width expand: ~0.5s
-- Steady visible: ~5s (configurable via `-timeout`)
-- Retract: ~0.9s
+- a: pill slides down from above the screen edge.
+- b: shelf widens to add a slot, slot icon fades in.
+- c: pill height drops to expose body text; text fades in shortly after.
+- d: text fades out and pill retracts back to chip-row height.
+- e: slot fades out (when its stack empties).
+- f: pill slides back up off-screen.
 
-Queue keeps notifications sequential with a 0.25s gap.
+For a single non-grouped notification: a → b → c → dwell → d → e → f.
+For a notification arriving in an existing group: only c → d (shelf
+already widened, slot already visible). For a notification arriving in
+a *new* group while the pill is already visible: b → c → d.
+
+Phase timings are kept in sync via constants in `NotchController` (e.g.
+`slideInDuration`, `phaseBToCDelay`, `slotRetractDuration`) and matching
+`.animation(_, value:)` modifiers in `NotchPillView`.
+
+## Stacking architecture
+
+`NotchPillView` is the unified pill. Slots, in-flight body, and the
+hover-expanded list all render inside the same black rounded shape:
+
+- Each `NotificationStack` is keyed by `g:<group>` (named) or
+  `a:_anon` (anonymous, all ungrouped notifications coalesce into one).
+- Stacks render left-to-right newest-on-the-right (closest to notch).
+  Up to 2 visible at full opacity; the 3rd renders at 40% opacity as a
+  partial chip; older groups still hold their notifications but no chip.
+- Hover any slot → drops the pill down to show that stack's full row
+  list, capped at ~3.5 rows tall with the rest scrollable inside an
+  AppKit-backed `ScrollView`. Top/bottom fade gradients only appear
+  when there's actually content to scroll into.
+- `model.inflight` is the *animation* source-of-truth (controller-owned).
+  `displayedInflight` is a view-side mirror that lingers during fade-out
+  so the body can animate out smoothly before unmount.
+- `model.inRetraction` flag suppresses hover-driven expansions during
+  the retraction window so a just-dismissed notification can't reappear
+  as a hover-list row.
+
+## Engagement behavior
+
+While the cursor is anywhere on the pill (`pillHovered`), new arrivals
+are queued in `arrivals` but do *not* trigger phase c. Once the user
+disengages (cursor leaves pill), `handleEngagementChange` resumes
+`startNext` and queued notifications play through their normal
+lifecycle. This avoids interrupting the user mid-read while still
+honoring `-timeout` semantics.

@@ -35,8 +35,11 @@ The legacy `-title` / `-text` flags are still accepted as aliases.
 | `-icon <path>` | image file (used if no `-symbol`) |
 | `-sound <name>` | `ready` / `warning` / `info` / `success` / `error`, or any name from `/System/Library/Sounds/` |
 | `-action <url\|cmd>` | URL opened or shell command run on tap |
-| `-focus` | shorthand for an `-action` that raises the source terminal app and (when run inside tmux) jumps to the originating pane; mutually exclusive with `-action` |
-| `-timeout <secs>` | auto-dismiss seconds (default 5) |
+| `-focus` | shorthand for an `-action` that raises the source terminal app and (when run inside tmux) jumps to the originating pane; mutually exclusive with `-action`. Implies `-timeout 0` (persistent until clicked or focus-dismissed) |
+| `-timeout <secs>` | auto-dismiss seconds (default 5). Use `0` for persistent (sits in the chip until explicitly dismissed) |
+| `-group <name>` | stack notifications under a named chip on the notch shelf. Multiple notifications with the same `-group` collapse into one chip with a count badge |
+| `-group-icon <symbol>` | SF Symbol for the chip; falls back to the notification's own `-symbol` |
+| `-group-color <name>` | tint for the chip; falls back to the notification's own `-color` |
 
 `-focus` auto-detects the terminal app
 (Ghostty, iTerm, Terminal, WezTerm, kitty, ...).
@@ -74,11 +77,22 @@ See [BUILDING.md](BUILDING.md).
 ## Behavior
 
 - Click the rectangle: runs `-action` (if any) and retracts.
-- Hover: pauses auto-dismiss until you mouse away.
-- Multiple notifications queue and play in order.
-- Focus / Do-Not-Disturb active: drops silently.
+- Hover the body: pauses the auto-dismiss timer until the cursor moves away.
+- Hover any chip on the shelf: drops down its full notification list.
+  Click an individual row to dismiss it; click the chip itself to dismiss
+  the topmost (newest) row.
+- Multiple notifications queue and play in order. While the user is
+  actively reading the pill (cursor anywhere on it), incoming arrivals
+  are queued silently and resume playback once the cursor leaves.
+- Up to 2 group chips render fully on the shelf; a 3rd group renders
+  as a faded "+1" indicator on the leftmost edge until space frees up.
+  Older groups beyond that are tracked in the data model but not shown.
+- Inside a stack, up to ~3.5 rows are visible at once and the rest
+  scroll, with a soft top/bottom fade indicating overflow.
+- Do-Not-Disturb active: drops silently.
 - Renders only when macOS reports an active built-in notched display.
-- Uses macOS screen geometry APIs to anchor the overlay to the built-in notch area, even with an external monitor attached.
+- Uses macOS screen geometry APIs to anchor the overlay to the
+  built-in notch area, even with an external monitor attached.
 
 ## Nix-darwin
 
@@ -86,7 +100,7 @@ A flake is provided. Add the input and import the module:
 
 ```nix
 {
-  inputs.notchify.url = "ssh://git@git.seimenis.cloud:2222/sespiros/notchify.git";
+  inputs.notchify.url = "github:sespiros/notchify";
 
   outputs = { self, nix-darwin, notchify, ... }: {
     darwinConfigurations."mybox" = nix-darwin.lib.darwinSystem {
