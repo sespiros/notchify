@@ -22,24 +22,17 @@ notchify "Title only"                                  # body is optional
 ```
 
 Positional args are `<title> [body]`, mirroring Linux's `notify-send`.
-The legacy `-title` / `-text` flags are still accepted as aliases.
-
 ## Flags
 
-| flag | meaning |
-|------|---------|
-| `-title <s>` | title (alias for first positional) |
-| `-text <s>` | subtitle (alias for second positional, optional) |
-| `-symbol <name>` | SF Symbol name |
-| `-color <name>` | tint for `-symbol` (orange/red/blue/...) |
-| `-icon <path>` | image file (used if no `-symbol`) |
-| `-sound <name>` | `ready` / `warning` / `info` / `success` / `error`, or any name from `/System/Library/Sounds/` |
-| `-action <url\|cmd>` | URL opened or shell command run on tap |
-| `-focus` | shorthand for an `-action` that raises the source terminal app and (when run inside tmux) jumps to the originating pane; mutually exclusive with `-action`. Implies `-timeout 0` (persistent until clicked or focus-dismissed) |
-| `-timeout <secs>` | auto-dismiss seconds (default 5). Use `0` for persistent (sits in the chip until explicitly dismissed) |
-| `-group <name>` | stack notifications under a named chip on the notch shelf. Multiple notifications with the same `-group` collapse into one chip with a count badge |
-| `-group-icon <symbol>` | SF Symbol for the chip; falls back to the notification's own `-symbol` |
-| `-group-color <name>` | tint for the chip; falls back to the notification's own `-color` |
+| flag | examples / default |
+|------|--------------------|
+| `-icon <name\|path>` | SF Symbol name (`bell.fill`, `checkmark.circle`) or image file path (`/Users/me/claude.png`, `~/icons/build.png`). Default: `bell.fill` |
+| `-color <name>` | Tint for SF Symbol icons. `orange`/`red`/`yellow`/`green`/`blue`/`purple`/`pink`/`white`/`gray`. Ignored for image-file icons. Default: `white` |
+| `-sound <name>` | `ready`/`warning`/`info`/`success`/`error`, or any name from `/System/Library/Sounds/` (e.g. `Glass`, `Ping`). Default: silent |
+| `-action <url\|cmd>` | URL opened or shell command run on tap. Default: click only dismisses |
+| `-focus` | Mutually exclusive with `-action`. Raises the source terminal app and (in tmux) jumps to the originating pane. Implies `-timeout 0` |
+| `-timeout <secs>` | Auto-dismiss seconds. `0` = persistent (sits in chip until clicked). Default: `5` |
+| `-group <name>` | Stack notifications under a named chip. Subsequent `-group <same>` calls collapse into one chip with a count badge. Chip's icon/color are taken from the first notification in that group |
 
 `-focus` auto-detects the terminal app
 (Ghostty, iTerm, Terminal, WezTerm, kitty, ...).
