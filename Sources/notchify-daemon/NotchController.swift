@@ -115,7 +115,17 @@ final class NotchController {
 
     func present(_ message: Message) {
         if Focus.doNotDisturbActive() {
-            NSLog("notchify: DND active, dropping \"\(message.title)\"")
+            // Don't play the in-flight or sound while DND is active,
+            // but still ingest into the stack so the user can see
+            // what they missed once they take their headphones off.
+            // Equivalent to "engagement-piled" arrivals: persistent
+            // row, no animation, no sound. They'll resume normal
+            // lifecycle if DND clears (left to a future tweak).
+            let stackID = stackIDFor(message)
+            let notification = StoredNotification(message: message, stackID: stackID)
+            ingest(notification)
+            ensurePanelOnScreen()
+            publishStacks()
             return
         }
 
