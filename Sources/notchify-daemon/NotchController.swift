@@ -218,10 +218,18 @@ final class NotchController {
 
     private func stackIDFor(_ message: Message) -> String {
         if let g = message.group, !g.isEmpty { return "g:\(g)" }
-        // All ungrouped notifications coalesce into one shared
-        // anonymous chip. The chip's icon/color get locked from the
-        // first such notification; subsequent ones just bump the count.
-        return "a:_anon"
+        // Ungrouped notifications:
+        // - If customized (any -icon or -color set), each gets its
+        //   own throwaway chip — treat the customization as an
+        //   implicit one-shot group.
+        // - If plain (no customization), coalesce under a shared
+        //   default chip so a flurry of vanilla notifications doesn't
+        //   spawn a chip per arrival.
+        let isCustomized = (message.icon != nil) || (message.color != nil)
+        if isCustomized {
+            return "a:\(UUID().uuidString)"
+        }
+        return "a:_default"
     }
 
     private func ingest(_ notification: StoredNotification) {
