@@ -6,7 +6,7 @@
   <br>
 </h1>
 
-<h4 align="center">Ephemeral notifications that drop out of the MacBook camera notch.</h4>
+<h4 align="center">Banner-style notifications that drop out of the MacBook camera notch.</h4>
 
 <p align="center">
   <img src="Resources/demo.gif" alt="Notchify demo" width="720">
@@ -26,7 +26,7 @@ Positional args are `<title> [body]`, mirroring Linux's `notify-send`.
 
 | flag | examples / default |
 |------|--------------------|
-| `-icon <name\|path>` | SF Symbol name (`bell.fill`, `checkmark.circle`) or image file path (`/Users/me/claude.png`, `~/icons/build.png`). Default: `bell.fill` |
+| `-icon <name\|path>` | SF Symbol name (`bell.fill`, `checkmark.circle`) or image file path (PNG/JPEG, animated GIF/WebP). Default: `bell.fill` |
 | `-color <name>` | Tint for SF Symbol icons. `orange`/`red`/`yellow`/`green`/`blue`/`purple`/`pink`/`white`/`gray`. Ignored for image-file icons. Default: `white` |
 | `-sound <name>` | `ready`/`warning`/`info`/`success`/`error`, or any name from `/System/Library/Sounds/` (e.g. `Glass`, `Ping`). Default: silent |
 | `-action <url\|cmd>` | URL opened or shell command run on tap. Default: click only dismisses |
@@ -144,12 +144,12 @@ text="Agent in $(basename "$PWD")"
 
 case "$state" in
   done)
-    notchify -title "Agent done"        -text "$text" \
-             -sound ready -symbol checkmark.circle.fill -color green
+    notchify "Agent done"        "$text" \
+             -sound ready -icon checkmark.circle.fill -color green
     ;;
   blocked)
-    notchify -title "Agent needs input" -text "$text" \
-             -sound warning -symbol exclamationmark.triangle.fill -color orange
+    notchify "Agent needs input" "$text" \
+             -sound warning -icon exclamationmark.triangle.fill -color orange
     ;;
 esac
 ```

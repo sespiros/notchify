@@ -56,6 +56,22 @@ Sources/
   notchify-daemon/         Menubar app + Unix socket server + SwiftUI overlay.
 Resources/
   Info.plist               .app bundle metadata (LSUIElement = YES).
+  AppIcon-master.png/.svg  App icon source; sliced by scripts/make-icon.swift.
 scripts/
   package.sh               Builds the .app and .dmg.
+  make-icon.swift          Slices AppIcon-master.png into the iconset and .icns.
+  test.sh                  Pre-push regression walkthrough; fires every
+                           feature combo against a running daemon. Run
+                           `./scripts/test.sh` (no args) for the section list.
+  demo.sh                  User-facing showcase used to record demo.gif.
 ```
+
+## Pre-push checks
+
+`scripts/test.sh` is a sectioned regression walkthrough that exercises
+every notification feature (stacks, overflow, hover, focus, animated
+icons, etc.) against a running `notchify-daemon`. Most sections need a
+human to hover/click/switch focus, so run them individually
+(`./scripts/test.sh hover`) rather than `all`. The script prefers the
+in-tree `./.build/debug/notchify` binary so it tests the current
+branch without re-installing.
