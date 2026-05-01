@@ -132,7 +132,14 @@ struct NotchPillView: View {
             slotShelf(
                 chipstacks: stacks,
                 effectiveHoveredID: effectiveHoveredID,
-                liveActiveID: stacks.count >= 2 ? liveStack.first?.chipstackID : nil,
+                // Suppress the live-active chevron while a hover-list
+                // is taking over the drop area: the body it points
+                // at isn't visible right now anyway. The hovered
+                // chip's chevron (via isExpanded) is what disambiguates
+                // in this state.
+                liveActiveID: (stacks.count >= 2 && hoveredStack == nil)
+                    ? liveStack.first?.chipstackID
+                    : nil,
                 hasOverflow: hasOverflow,
                 notchSize: notchSize,
                 shelfWidth: shelfWidth,
@@ -271,7 +278,8 @@ struct NotchPillView: View {
                         stack: stack,
                         notchHeight: notchSize.height,
                         isExpanded: isExpandedStack,
-                        isLiveActive: isLiveActive
+                        isLiveActive: isLiveActive,
+                        totalChipCount: chipstacks.count
                     )
                         .frame(width: Self.slotWidth, height: notchSize.height)
                         .contentShape(Rectangle())

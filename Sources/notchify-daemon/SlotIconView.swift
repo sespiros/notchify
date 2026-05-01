@@ -12,15 +12,26 @@ struct SlotIconView: View {
     let notchHeight: CGFloat
     var isExpanded: Bool = false
     var isLiveActive: Bool = false
+    /// Total number of chips currently on the shelf. Used to gate
+    /// chevron visibility: with multiple chips, even a single-row
+    /// hover-expansion benefits from the chevron to associate the
+    /// hovered chip with the dropped-down list.
+    var totalChipCount: Int = 1
 
     var body: some View {
-        // Chevron shows only when there's something extra to reveal
-        // by expanding: more than one notification under this chip
-        // OR a livestack body whose chip needs disambiguating among
-        // multiple chips. A single chip with a single row would
-        // expand to identical content — no chevron needed.
+        // Chevron is meaningful when there's disambiguation to do.
+        // - isLiveActive (already gated upstream to count >= 2): the
+        //   body belongs to this chip among several.
+        // - isExpanded with multiple chips: list of one row but
+        //   useful to show "this chip is the one being expanded".
+        // - isExpanded with multiple rows: list reveals more than
+        //   the body would, regardless of chip count.
+        // The single-chip + single-row + isExpanded case stays
+        // suppressed because the hover-list would just repeat what
+        // the body already shows.
         let hasExtraRows = stack.notifications.count > 1
-        let chevronVisible = (isExpanded && hasExtraRows) || isLiveActive
+        let multiChip = totalChipCount >= 2
+        let chevronVisible = isLiveActive || (isExpanded && (hasExtraRows || multiChip))
         ZStack(alignment: .topTrailing) {
             // Icon centered in the slot; chevron is positioned via
             // offset so adding/removing it doesn't shift the icon
