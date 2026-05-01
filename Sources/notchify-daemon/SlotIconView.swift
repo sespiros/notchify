@@ -5,7 +5,7 @@ import SwiftUI
 /// true (the stack's list is currently dropped down), a small
 /// chevron-down sits beneath the icon as a visual cue.
 struct SlotIconView: View {
-    let stack: NotificationStack
+    let stack: ChipStack
     let notchHeight: CGFloat
     var isExpanded: Bool = false
 

@@ -15,22 +15,24 @@ final class NotchController {
     private let hosting: FirstMouseHosting<NotchPillView>
     private let model = NotchModel()
 
-    /// Authoritative stack store keyed by stackID. The model's `stacks`
-    /// array is a projection of this through `stackOrder`, rebuilt on
-    /// every mutation so SwiftUI sees a clean snapshot.
-    private var stacks: [String: NotificationStack] = [:]
-    /// Display order, left-to-right. New stacks append (sit closest
-    /// to the notch); existing stacks shift further left.
-    private var stackOrder: [String] = []
+    /// Authoritative chipstack store keyed by chipstackID. The
+    /// model's `chipstacks` array is a projection of this through
+    /// `chipstackOrder`, rebuilt on every mutation so SwiftUI sees
+    /// a clean snapshot.
+    private var chipstacks: [String: ChipStack] = [:]
+    /// Display order, left-to-right. New chipstacks append (sit
+    /// closest to the notch); existing ones shift further left.
+    private var chipstackOrder: [String] = []
 
     /// Sequenced slide-in queue. At most one notification animates
     /// at a time, the rest wait here.
     private var arrivals: [StoredNotification] = []
 
-    /// The dwell timer for the in-flight notification. Cancellable on
-    /// click so the retraction proceeds immediately instead of waiting
-    /// out the full dwell.
-    private var dwellTask: Task<Void, Never>?
+    /// Per-row dwell timers, keyed by notification id. Each live-stack
+    /// row gets its own; expiration removes that one row (and starts
+    /// the pill retract only when the live stack drains). Cancelled
+    /// on click, on engagement (paused), and on screen-config change.
+    private var dwellTasks: [UUID: Task<Void, Never>] = [:]
     /// Cleanup task scheduled after a retraction starts. Re-scheduled
     /// per retraction; tracked here only so `screenConfigurationDidChange`
     /// can cancel an in-flight teardown.
@@ -96,7 +98,7 @@ final class NotchController {
             model: model,
             onClick: { [weak self] n in self?.handleClick(n) },
             onRowClick: { [weak self] n in self?.handleRowClick(n) },
-            onChipClick: { [weak self] stackID in self?.handleChipClick(stackID) },
+            onChipClick: { [weak self] chipstackID in self?.handleChipClick(chipstackID) },
             onInflightHover: { [weak self] hovering in self?.handleInflightHover(hovering) },
             onEngagementChange: { [weak self] engaged in self?.handleEngagementChange(engaged) }
         )
@@ -110,8 +112,8 @@ final class NotchController {
             // Equivalent to "engagement-piled" arrivals: persistent
             // row, no animation, no sound. They'll resume normal
             // lifecycle if DND clears (left to a future tweak).
-            let stackID = stackIDFor(message)
-            let notification = StoredNotification(message: message, stackID: stackID)
+            let chipstackID = chipstackIDFor(message)
+            let notification = StoredNotification(message: message, chipstackID: chipstackID)
             ingest(notification)
             ensurePanelOnScreen()
             publishStacks()
@@ -144,9 +146,9 @@ final class NotchController {
         // A fresh arrival exits the "retracting" UX state.
         model.inRetraction = false
 
-        let stackID = stackIDFor(message)
-        let isNewStack = (stacks[stackID] == nil)
-        let notification = StoredNotification(message: message, stackID: stackID)
+        let chipstackID = chipstackIDFor(message)
+        let isNewStack = (chipstacks[chipstackID] == nil)
+        let notification = StoredNotification(message: message, chipstackID: chipstackID)
         ingest(notification)
 
         ensurePanelOnScreen()
@@ -181,13 +183,13 @@ final class NotchController {
         //    immediately (b plays in isolation). Existing stacks
         //    just publish to bump the badge.
         let pillCurrentlyHidden =
-            model.stacks.isEmpty && model.inflight == nil && !model.forcedVisible
+            model.chipstacks.isEmpty && model.liveStack.isEmpty && !model.forcedVisible
         // Genuine mid-slide-in: forcedVisible set + stacks empty AND
         // there's an actual slide-in task pending. If slideInTask is
         // nil and we're in this state, we're mid-teardown (or
         // post-cancel teardown) and should fall through to publish
         // + start, NOT silently queue.
-        let midSlide = model.forcedVisible && model.stacks.isEmpty && slideInTask != nil
+        let midSlide = model.forcedVisible && model.chipstacks.isEmpty && slideInTask != nil
 
         if pillCurrentlyHidden {
             model.forcedVisible = true
@@ -208,7 +210,11 @@ final class NotchController {
         }
 
         publishStacks()
-        if model.inflight == nil {
+        // Always queue. If the livestack is empty, drain immediately;
+        // otherwise the current livestack row will pick this up when
+        // it retracts (same-group → swap in place without tearing
+        // the pill down; different-group → existing drain path).
+        if model.liveStack.isEmpty {
             startNext(newStack: isNewStack)
         }
     }
@@ -218,12 +224,12 @@ final class NotchController {
     /// (b), then kicks off the first in-flight (c).
     private func completeSlideIn() {
         publishStacks()
-        if model.inflight == nil && !arrivals.isEmpty {
+        if model.liveStack.isEmpty && !arrivals.isEmpty {
             startNext(newStack: true)
         }
     }
 
-    private func stackIDFor(_ message: Message) -> String {
+    private func chipstackIDFor(_ message: Message) -> String {
         if let g = message.group, !g.isEmpty { return "g:\(g)" }
         // Ungrouped notifications:
         // - If customized (any -icon or -color set), each gets its
@@ -240,14 +246,14 @@ final class NotchController {
     }
 
     private func ingest(_ notification: StoredNotification) {
-        let id = notification.stackID
+        let id = notification.chipstackID
         let isAnon = id.hasPrefix("a:")
-        if stacks[id] == nil {
-            stacks[id] = NotificationStack(id: id, isAnonymous: isAnon)
-            stackOrder.append(id)
+        if chipstacks[id] == nil {
+            chipstacks[id] = ChipStack(id: id, isAnonymous: isAnon)
+            chipstackOrder.append(id)
         }
         let m = notification.message
-        var stack = stacks[id]!
+        var stack = chipstacks[id]!
         if stack.resolvedIcon == nil {
             stack.resolvedIcon = m.icon
         }
@@ -255,18 +261,18 @@ final class NotchController {
             stack.resolvedColor = m.color
         }
         stack.notifications.insert(notification, at: 0)
-        stacks[id] = stack
+        chipstacks[id] = stack
         // Track the latest-ingested stack so the view can expand it
         // when the user hovers a generic (non-chip) part of the pill.
-        model.mostRecentStackID = id
+        model.mostRecentChipstackID = id
     }
 
     private func publishStacks() {
-        model.stacks = stackOrder.compactMap { stacks[$0] }
+        model.chipstacks = chipstackOrder.compactMap { chipstacks[$0] }
         // Once stacks are non-empty, pillVisible is satisfied by them.
         // Clear forcedVisible so the slide-up logic works naturally
         // when the last stack is later removed.
-        if !model.stacks.isEmpty {
+        if !model.chipstacks.isEmpty {
             model.forcedVisible = false
         }
         updateFocusTimer()
@@ -275,7 +281,7 @@ final class NotchController {
     /// Start/stop the focus poll based on whether any notification in
     /// the current stacks carries a dismissKey. Idempotent.
     private func updateFocusTimer() {
-        let needsPoll = stacks.values.contains { stack in
+        let needsPoll = chipstacks.values.contains { stack in
             stack.notifications.contains { $0.message.dismissKey != nil }
         }
         if needsPoll {
@@ -309,8 +315,8 @@ final class NotchController {
         }
 
         var toDismiss: [StoredNotification] = []
-        for stackID in stackOrder {
-            guard let stack = stacks[stackID] else { continue }
+        for chipstackID in chipstackOrder {
+            guard let stack = chipstacks[chipstackID] else { continue }
             for n in stack.notifications {
                 if let key = n.message.dismissKey,
                    FocusDetector.matches(key, bundle: bundle, activePanesProvider: provider) {
@@ -321,9 +327,9 @@ final class NotchController {
         guard !toDismiss.isEmpty else { return }
 
         for n in toDismiss {
-            if model.inflight?.id == n.id {
+            if model.liveStack.contains(where: { $0.id == n.id }) {
                 // Remove from stack first so cleanup's removeNotification
-                // is a no-op; then play the in-flight retract.
+                // is a no-op; then play the live-row retract.
                 removeNotification(n)
                 beginRetraction(of: n, viaClick: true)
             } else {
@@ -331,7 +337,7 @@ final class NotchController {
             }
         }
         publishStacks()
-        if stacks.isEmpty && model.inflight == nil {
+        if chipstacks.isEmpty && model.liveStack.isEmpty {
             scheduleEndOfPillRetract()
         }
     }
@@ -360,7 +366,7 @@ final class NotchController {
     }
 
     private func startNext(newStack: Bool) {
-        guard model.inflight == nil else { return }
+        guard model.liveStack.isEmpty else { return }
         guard !arrivals.isEmpty else { return }
         let next = arrivals.removeFirst()
 
@@ -393,19 +399,27 @@ final class NotchController {
                 self.arrivals.insert(next, at: 0)
                 return
             }
-            self.model.inflight = next
+            self.model.liveStack = [next]
             self.scheduleDwell(for: next)
         }
     }
 
     private func scheduleDwell(for n: StoredNotification) {
-        dwellTask?.cancel()
+        dwellTasks[n.id]?.cancel()
+        // Persistent rows still get a brief visible-body window, then
+        // collapse out of the live stack while remaining in the chip
+        // stack until the user clicks them.
         let dwell: TimeInterval = isPersistent(n) ? 4.0 : (n.message.timeout ?? 5.0)
-        dwellTask = Task { @MainActor [weak self] in
+        dwellTasks[n.id] = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(dwell))
             guard !Task.isCancelled else { return }
             self?.beginRetraction(of: n, viaClick: false)
         }
+    }
+
+    private func cancelAllDwells() {
+        for (_, t) in dwellTasks { t.cancel() }
+        dwellTasks.removeAll()
     }
 
     private func handleClick(_ n: StoredNotification) {
@@ -413,42 +427,45 @@ final class NotchController {
         beginRetraction(of: n, viaClick: true)
     }
 
-    /// Engagement transitions. While engaged, new arrivals are
-    /// queued silently; once the user disengages, queued arrivals
-    /// resume their normal lifecycle (slide-in, dwell, retract).
+    /// Engagement transitions. Hover on the pill pauses every live
+    /// row's dwell so the user can read; un-hover restarts each
+    /// remaining row's dwell from full duration. While engaged, new
+    /// arrivals are queued silently; on disengage, queued arrivals
+    /// resume their normal lifecycle.
     private func handleEngagementChange(_ engaged: Bool) {
-        guard !engaged else { return }
-        guard !arrivals.isEmpty, model.inflight == nil else { return }
+        if engaged {
+            // Pause every visible row's dwell. They restart from full
+            // duration on disengage.
+            cancelAllDwells()
+            return
+        }
+        // Disengaged: restart dwells for every live row, then drain
+        // any pending arrivals if the live stack is empty.
+        for n in model.liveStack {
+            scheduleDwell(for: n)
+        }
+        guard !arrivals.isEmpty, model.liveStack.isEmpty else { return }
         let nextIsNewStack = arrivals.first.map {
-            stacks[$0.stackID]?.notifications.count == 1
+            chipstacks[$0.chipstackID]?.notifications.count == 1
         } ?? false
         startNext(newStack: nextIsNewStack)
     }
 
-    /// Hover on the in-flight body pauses the dwell timer (so the
-    /// notification waits while the user reads it). Un-hover restarts
-    /// the dwell from full duration. Mirrors the original NotchView's
-    /// pause-on-hover behavior.
-    private func handleInflightHover(_ hovering: Bool) {
-        guard let n = model.inflight else { return }
-        if hovering {
-            dwellTask?.cancel()
-            dwellTask = nil
-        } else {
-            scheduleDwell(for: n)
-        }
-    }
+    /// Legacy callback retained for the view's onInflightHover plumbing;
+    /// now a no-op because pause-on-hover is driven by the engagement
+    /// gate (handlePillHover → handleEngagementChange).
+    private func handleInflightHover(_ hovering: Bool) {}
 
     /// Click on a chip slot. Dismisses the topmost (newest)
     /// notification in that stack — repeated clicks dismiss
     /// successively older ones, top-to-bottom. Runs the row's
-    /// action if any. If the top is also the currently in-flight
-    /// notification, kicks off the retraction so the body actually
-    /// goes away instead of waiting out the dwell.
-    private func handleChipClick(_ stackID: String) {
-        guard let top = stacks[stackID]?.notifications.first else { return }
+    /// action if any. If the top is also live, retract that row
+    /// out of the live stack (which itself triggers pill teardown
+    /// only when the live stack is now empty).
+    private func handleChipClick(_ chipstackID: String) {
+        guard let top = chipstacks[chipstackID]?.notifications.first else { return }
         runAction(top.message.action)
-        if model.inflight?.id == top.id {
+        if model.liveStack.contains(where: { $0.id == top.id }) {
             beginRetraction(of: top, viaClick: true)
             return
         }
@@ -457,9 +474,9 @@ final class NotchController {
         // Without this, pillVisible flips false at publishStacks
         // time and the pill races up while the slot is still
         // animating out.
-        let willEmptyEverything = (stacks.count == 1)
-            && (stacks[stackID]?.notifications.count ?? 0) <= 1
-            && model.inflight == nil
+        let willEmptyEverything = (chipstacks.count == 1)
+            && (chipstacks[chipstackID]?.notifications.count ?? 0) <= 1
+            && model.liveStack.isEmpty
         if willEmptyEverything {
             model.forcedVisible = true
         }
@@ -475,9 +492,9 @@ final class NotchController {
     /// the slot if it was the last), runs its action.
     private func handleRowClick(_ n: StoredNotification) {
         runAction(n.message.action)
-        let willEmptyEverything = (stacks.count == 1)
-            && (stacks[n.stackID]?.notifications.count ?? 0) <= 1
-            && model.inflight == nil
+        let willEmptyEverything = (chipstacks.count == 1)
+            && (chipstacks[n.chipstackID]?.notifications.count ?? 0) <= 1
+            && model.liveStack.isEmpty
         if willEmptyEverything {
             // Hold the pill visible during the slot retract (e) so it
             // doesn't get caught up in the pill slide-up (f). The
@@ -491,17 +508,52 @@ final class NotchController {
         }
     }
 
-    /// Tear the in-flight notification back down. The view animates
-    /// the text-out + height-retract; we wait for that to finish, then
-    /// decide whether the row stays in its stack (persistent + auto)
-    /// or gets removed (clicked or non-persistent).
+    /// Retract a single live row. If other rows remain in the live
+    /// stack, the pill simply shrinks to fit them and we're done. If
+    /// this was the last live row, fall into the full pill teardown
+    /// path (drain queue or schedule slide-up).
     private func beginRetraction(of n: StoredNotification, viaClick: Bool) {
-        guard model.inflight?.id == n.id else { return }
-        dwellTask?.cancel()
-        dwellTask = nil
-        model.inRetraction = true
-        model.inflight = nil
+        guard model.liveStack.contains(where: { $0.id == n.id }) else { return }
+        dwellTasks[n.id]?.cancel()
+        dwellTasks.removeValue(forKey: n.id)
 
+        let willRemoveFromChipStack = viaClick || !isPersistent(n)
+        // Pop the row from the live stack immediately so the view
+        // animates its disappearance; the chip-stack mutation (if
+        // any) waits until after the body fade so it doesn't race.
+        model.liveStack.removeAll { $0.id == n.id }
+
+        // Other rows still in the live stack: pill stays open. No
+        // teardown, no inRetraction (the rest are still "in flight").
+        if !model.liveStack.isEmpty {
+            if willRemoveFromChipStack {
+                removeNotification(n)
+                publishStacks()
+            }
+            return
+        }
+
+        // Same-chipstack fast-path: if the next queued arrival
+        // belongs to the same chipstack as the one just retracted,
+        // swap it directly into the livestack. The pill keeps its
+        // drop height and chip slot; the body cross-fades. Skipped
+        // while the user is engaged (drain happens on disengage).
+        if let next = arrivals.first,
+           next.chipstackID == n.chipstackID,
+           !model.isUserEngaged {
+            if willRemoveFromChipStack {
+                removeNotification(n)
+                publishStacks()
+            }
+            arrivals.removeFirst()
+            Sound.play(next.message.sound)
+            model.liveStack = [next]
+            scheduleDwell(for: next)
+            return
+        }
+
+        // Live stack just emptied — full retraction path.
+        model.inRetraction = true
         cleanupTask?.cancel()
         cleanupTask = Task { @MainActor [weak self] in
             // Wait for body fade-out + pillHeight retract to play
@@ -509,10 +561,9 @@ final class NotchController {
             try? await Task.sleep(for: .milliseconds(180))
             guard let self, !Task.isCancelled else { return }
 
-            let willRemove = viaClick || !self.isPersistent(n)
-            let willEmptyEverything = willRemove
-                && (self.stacks.count == 1)
-                && (self.stacks[n.stackID]?.notifications.count ?? 0) <= 1
+            let willEmptyEverything = willRemoveFromChipStack
+                && (self.chipstacks.count == 1)
+                && (self.chipstacks[n.chipstackID]?.notifications.count ?? 0) <= 1
                 && self.arrivals.isEmpty
 
             if willEmptyEverything {
@@ -521,7 +572,7 @@ final class NotchController {
                 self.model.forcedVisible = true
             }
 
-            if willRemove {
+            if willRemoveFromChipStack {
                 self.removeNotification(n)
                 self.publishStacks()
             }
@@ -534,14 +585,14 @@ final class NotchController {
                     try? await Task.sleep(for: .milliseconds(220))
                     guard !Task.isCancelled else { return }
                     let nextIsNewStack = self.arrivals.first.map {
-                        self.stacks[$0.stackID]?.notifications.count == 1
+                        self.chipstacks[$0.chipstackID]?.notifications.count == 1
                     } ?? false
                     self.startNext(newStack: nextIsNewStack)
                     return
                 }
             }
 
-            if self.stacks.isEmpty {
+            if self.chipstacks.isEmpty {
                 self.scheduleEndOfPillRetract()
             } else {
                 // Partial retraction: a notification removed but the
@@ -566,7 +617,7 @@ final class NotchController {
             self.model.forcedVisible = false
             try? await Task.sleep(for: .milliseconds(NotchController.slideOutDuration))
             guard !Task.isCancelled else { return }
-            if self.stacks.isEmpty && self.model.inflight == nil {
+            if self.chipstacks.isEmpty && self.model.liveStack.isEmpty {
                 self.panel.orderOut(nil)
             }
             self.model.inRetraction = false
@@ -580,28 +631,33 @@ final class NotchController {
     }
 
     private func removeNotification(_ n: StoredNotification) {
-        guard var stack = stacks[n.stackID] else { return }
+        guard var stack = chipstacks[n.chipstackID] else { return }
         stack.notifications.removeAll { $0.id == n.id }
         if stack.notifications.isEmpty {
-            stacks.removeValue(forKey: n.stackID)
-            stackOrder.removeAll { $0 == n.stackID }
+            chipstacks.removeValue(forKey: n.chipstackID)
+            chipstackOrder.removeAll { $0 == n.chipstackID }
         } else {
-            stacks[n.stackID] = stack
+            chipstacks[n.chipstackID] = stack
         }
     }
 
     func screenConfigurationDidChange() {
-        guard let current = model.inflight else { return }
+        guard !model.liveStack.isEmpty else { return }
         cleanupTask?.cancel()
-        dwellTask?.cancel()
-        model.inflight = nil
-        // Replay the in-flight one on the new geometry.
-        arrivals.insert(current, at: 0)
+        cancelAllDwells()
+        // Re-queue every live row in arrival order (oldest first) so
+        // they replay on the new geometry. liveStack is newest-first
+        // so we reverse before prepending.
+        let toReplay = Array(model.liveStack.reversed())
+        model.liveStack.removeAll()
+        arrivals.insert(contentsOf: toReplay, at: 0)
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(150))
             guard let self else { return }
             self.ensurePanelOnScreen()
-            let isNew = self.stacks[current.stackID]?.notifications.count == 1
+            let isNew = self.arrivals.first.map {
+                self.chipstacks[$0.chipstackID]?.notifications.count == 1
+            } ?? false
             self.startNext(newStack: isNew)
         }
     }

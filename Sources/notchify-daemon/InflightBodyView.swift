@@ -12,13 +12,14 @@ struct InflightBodyView: View {
     var onHover: (Bool) -> Void
 
     var body: some View {
+        let hasBody = !(notification.message.text ?? "").isEmpty
         Button(action: { onClick(notification) }) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(notification.message.title)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                if let body = notification.message.text, !body.isEmpty {
+                if hasBody, let body = notification.message.text {
                     Text(body)
                         .font(.system(size: 11))
                         .foregroundStyle(.white.opacity(0.7))
@@ -30,7 +31,7 @@ struct InflightBodyView: View {
             .padding(.horizontal, 9)
             .padding(.top, 1)
             .padding(.bottom, 4)
-            .frame(width: pillWidth, height: inflightDropHeight, alignment: .topLeading)
+            .frame(width: pillWidth, height: inflightDropHeight, alignment: hasBody ? .topLeading : .leading)
             .opacity(textVisible ? 1 : 0)
             .contentShape(Rectangle())
         }

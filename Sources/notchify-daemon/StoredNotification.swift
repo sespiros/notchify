@@ -7,7 +7,7 @@ import Foundation
 struct StoredNotification: Identifiable {
     let id = UUID()
     let message: Message
-    let stackID: String
+    let chipstackID: String
     let arrivedAt = Date()
 }
 
@@ -15,7 +15,7 @@ struct StoredNotification: Identifiable {
 /// named groups or "a:_anon" for the shared anonymous chip.
 /// `notifications` is newest-first to match the standard
 /// notification-center sort.
-struct NotificationStack: Identifiable {
+struct ChipStack: Identifiable {
     let id: String
     let isAnonymous: Bool
     var notifications: [StoredNotification] = []

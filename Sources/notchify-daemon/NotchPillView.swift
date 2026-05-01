@@ -29,7 +29,10 @@ struct NotchPillView: View {
     /// Drop-down height for in-flight bodies that fit on one body
     /// line. Two-line bodies get `extraHeightTwoLine` instead so the
     /// pill grows just enough to fit; bodies past two lines
-    /// ellipsize via `.lineLimit(2)`.
+    /// ellipsize via `.lineLimit(2)`. Title-only notifications drop
+    /// by exactly the notch height (computed at measure time), so
+    /// the pill becomes a 2x-notch box with the title centered in
+    /// the lower half.
     static let extraHeight: CGFloat = 40
     static let extraHeightTwoLine: CGFloat = 54
     static let slotWidth: CGFloat = 28
@@ -53,14 +56,8 @@ struct NotchPillView: View {
     /// to scroll. Past that, content scrolls inside.
     static let maxListHeight: CGFloat = 3.5 * rowHeight + listVerticalPadding * 2
 
-    @State private var hoveredStackID: String? = nil
+    @State private var hoveredChipstackID: String? = nil
     @State private var textVisible: Bool = false
-    /// View-side mirror of model.inflight that LINGERS during fade-out.
-    /// model.inflight is the truth for the controller's lifecycle
-    /// (dwell, click, etc.); displayedInflight is what the view
-    /// renders, kept around long enough for the text fade-out to
-    /// complete before the button unmounts.
-    @State private var displayedInflight: StoredNotification? = nil
     /// True while the cursor is anywhere over the pill (used to
     /// expand the most-recent stack when the cursor is on a generic
     /// part of the pill rather than a specific slot).
@@ -76,7 +73,7 @@ struct NotchPillView: View {
     @State private var inflightDropCache: (id: UUID, height: CGFloat)? = nil
 
     var body: some View {
-        let stacks = model.stacks
+        let stacks = model.chipstacks
         let notchSize = model.notchSize
 
         let total = stacks.count
@@ -87,10 +84,11 @@ struct NotchPillView: View {
         let partialSlotID: String? = hasPartialSlot ? visibleStacks.first?.id : nil
         let shelfWidth = NotchPillView.shelfWidthFor(slotCount: visibleStacks.count)
         let pillWidth = notchSize.width + shelfWidth
-        let isInflight = (model.inflight != nil)
+        let liveStack = model.liveStack
+        let isInflight = !liveStack.isEmpty
 
         let effectiveHoveredID = computeEffectiveHoveredID(stacks: stacks, isInflight: isInflight)
-        let hoveredStack: NotificationStack? = effectiveHoveredID.flatMap { id in
+        let hoveredStack: ChipStack? = effectiveHoveredID.flatMap { id in
             stacks.first { $0.id == id }
         }
         let hoverDropHeight: CGFloat = {
@@ -98,7 +96,7 @@ struct NotchPillView: View {
             let raw = CGFloat(hs.notifications.count) * Self.rowHeight + Self.listVerticalPadding * 2
             return min(raw, Self.maxListHeight)
         }()
-        let inflightDropHeight = currentInflightDropHeight(notchWidth: notchSize.width)
+        let inflightDropHeight = currentInflightDropHeight(notchSize: notchSize)
         let dropHeight = max(inflightDropHeight, hoverDropHeight)
         let pillHeight = notchSize.height + dropHeight
         let pillVisible = !stacks.isEmpty || isInflight || model.forcedVisible
@@ -126,15 +124,13 @@ struct NotchPillView: View {
                 pillHeight: pillHeight
             )
 
-            if let n = displayedInflight, hoveredStack == nil {
-                InflightBodyView(
-                    notification: n,
+            if hoveredStack == nil {
+                liveStackView(
+                    liveStack: liveStack,
                     pillWidth: pillWidth,
                     pillHeight: pillHeight,
                     inflightDropHeight: inflightDropHeight,
-                    textVisible: textVisible,
-                    onClick: onClick,
-                    onHover: onInflightHover
+                    notchHeight: notchSize.height
                 )
             }
 
@@ -158,27 +154,54 @@ struct NotchPillView: View {
         .animation(.easeOut(duration: 0.22), value: pillVisible)
         .animation(.easeOut(duration: 0.2), value: stacks.count)
         .animation(.easeOut(duration: 0.15), value: pillHeight)
-        .animation(.easeOut(duration: 0.18), value: hoveredStackID)
+        .animation(.easeOut(duration: 0.18), value: hoveredChipstackID)
         .onHover { hovering in handlePillHover(hovering) }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-        .onChange(of: model.stacks.map(\.id)) { newIDs in
-            if let id = hoveredStackID, !newIDs.contains(id) {
-                hoveredStackID = nil
+        .onChange(of: model.chipstacks.map(\.id)) { newIDs in
+            if let id = hoveredChipstackID, !newIDs.contains(id) {
+                hoveredChipstackID = nil
             }
         }
         .onChange(of: pillVisible) { newVisible in
             if !newVisible {
-                hoveredStackID = nil
+                hoveredChipstackID = nil
                 pillHovered = false
                 model.isUserEngaged = false
             }
         }
-        .onChange(of: model.inflight?.id) { _ in handleInflightChange() }
+        .onChange(of: model.liveStack.first?.id) { _ in handleInflightChange() }
+    }
+
+    /// Render the topmost livestack row in the pill drop area.
+    /// Successive arrivals from the same chipstack are swapped in
+    /// place by the controller (no notch retract); the `.id` swap
+    /// lets SwiftUI cross-fade the body content.
+    @ViewBuilder
+    private func liveStackView(
+        liveStack: [StoredNotification],
+        pillWidth: CGFloat,
+        pillHeight: CGFloat,
+        inflightDropHeight: CGFloat,
+        notchHeight: CGFloat
+    ) -> some View {
+        if let top = liveStack.first {
+            InflightBodyView(
+                notification: top,
+                pillWidth: pillWidth,
+                pillHeight: pillHeight,
+                inflightDropHeight: inflightDropHeight,
+                textVisible: textVisible,
+                onClick: onClick,
+                onHover: onInflightHover
+            )
+            .id(top.id)
+            .transition(.opacity)
+        }
     }
 
     @ViewBuilder
     private func slotShelf(
-        visibleStacks: [NotificationStack],
+        visibleStacks: [ChipStack],
         partialSlotID: String?,
         effectiveHoveredID: String?,
         notchSize: CGSize,
@@ -217,41 +240,45 @@ struct NotchPillView: View {
     }
 
     private func computeEffectiveHoveredID(
-        stacks: [NotificationStack],
+        stacks: [ChipStack],
         isInflight: Bool
     ) -> String? {
         guard !model.inRetraction else { return nil }
 
-        if let id = hoveredStackID {
-            if let inflight = model.inflight, inflight.stackID == id,
-               let stack = stacks.first(where: { $0.id == id }),
-               stack.notifications.count <= 1 {
+        if let id = hoveredChipstackID {
+            // Suppress hover-list expansion when it would duplicate
+            // what's already in the live stack: same group AND every
+            // chip-stack row is already visible up there.
+            let liveCountForStack = model.liveStack.filter { $0.chipstackID == id }.count
+            if let stack = stacks.first(where: { $0.id == id }),
+               liveCountForStack > 0,
+               stack.notifications.count <= liveCountForStack {
                 return nil
             }
             return id
         }
         guard !isInflight else { return nil }
         guard !stacks.isEmpty else { return nil }
-        if pillHovered, let recent = model.mostRecentStackID,
+        if pillHovered, let recent = model.mostRecentChipstackID,
            stacks.contains(where: { $0.id == recent }) {
             return recent
         }
         return nil
     }
 
-    private func currentInflightDropHeight(notchWidth: CGFloat) -> CGFloat {
-        guard let inflight = model.inflight else { return 0 }
-        if let cached = inflightDropCache, cached.id == inflight.id {
+    private func currentInflightDropHeight(notchSize: CGSize) -> CGFloat {
+        guard let top = model.liveStack.first else { return 0 }
+        if let cached = inflightDropCache, cached.id == top.id {
             return cached.height
         }
-        return Self.measureDropHeight(text: inflight.message.text, notchWidth: notchWidth)
+        return Self.measureDropHeight(text: top.message.text, notchSize: notchSize)
     }
 
-    private static func measureDropHeight(text: String?, notchWidth: CGFloat) -> CGFloat {
+    private static func measureDropHeight(text: String?, notchSize: CGSize) -> CGFloat {
         let body = text ?? ""
-        if body.isEmpty { return extraHeight }
+        if body.isEmpty { return notchSize.height }
         let font = NSFont.systemFont(ofSize: 11)
-        let availableWidth = max(notchWidth - 20, 100)
+        let availableWidth = max(notchSize.width - 20, 100)
         let attr = NSAttributedString(string: body, attributes: [.font: font])
         let rect = attr.boundingRect(
             with: CGSize(width: availableWidth, height: .greatestFiniteMagnitude),
@@ -274,9 +301,8 @@ struct NotchPillView: View {
     }
 
     private func handleInflightChange() {
-        if let next = model.inflight {
-            displayedInflight = next
-            let height = Self.measureDropHeight(text: next.message.text, notchWidth: model.notchSize.width)
+        if let next = model.liveStack.first {
+            let height = Self.measureDropHeight(text: next.message.text, notchSize: model.notchSize)
             inflightDropCache = (next.id, height)
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(50))
@@ -286,8 +312,6 @@ struct NotchPillView: View {
             inflightDropCache = nil
             Task { @MainActor in
                 withAnimation(.easeOut(duration: 0.1)) { textVisible = false }
-                try? await Task.sleep(for: .milliseconds(120))
-                displayedInflight = nil
             }
         }
     }
@@ -299,13 +323,13 @@ struct NotchPillView: View {
     private func handleHover(_ stackID: String, _ hovering: Bool) {
         hoverClearTask?.cancel()
         if hovering {
-            hoveredStackID = stackID
+            hoveredChipstackID = stackID
         } else {
             hoverClearTask = Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(120))
                 guard !Task.isCancelled else { return }
-                if hoveredStackID == stackID {
-                    hoveredStackID = nil
+                if hoveredChipstackID == stackID {
+                    hoveredChipstackID = nil
                 }
             }
         }

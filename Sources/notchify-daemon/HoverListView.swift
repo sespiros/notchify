@@ -5,7 +5,7 @@ import SwiftUI
 /// internally; top/bottom fades only appear when content exists past
 /// the corresponding edge.
 struct HoverListView: View {
-    let stack: NotificationStack
+    let stack: ChipStack
     let pillWidth: CGFloat
     let pillHeight: CGFloat
     let hoverDropHeight: CGFloat

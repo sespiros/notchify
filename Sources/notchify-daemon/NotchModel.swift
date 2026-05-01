@@ -8,13 +8,22 @@ import CoreGraphics
 /// rewiring the panel/hosting setup each time.
 @MainActor
 final class NotchModel: ObservableObject {
-    /// Stacks left-to-right. `stackOrder` order from the controller is
-    /// projected into this array (newest stacks at the *end* so they
-    /// render closest to the notch on the right).
-    @Published var stacks: [NotificationStack] = []
-    /// The notification currently doing its slide-in / slide-out. nil
-    /// when nothing is in flight, in which case only chips render.
-    @Published var inflight: StoredNotification?
+    /// Chipstacks left-to-right. `chipstackOrder` order from the
+    /// controller is projected into this array (newest at the *end*
+    /// so they render closest to the notch on the right).
+    @Published var chipstacks: [ChipStack] = []
+    /// Notifications currently visible in the dropped-down area of
+    /// the pill ("live stack"). Newest first (index 0 = topmost row).
+    /// All entries belong to the same group (same `chipstackID`); a new
+    /// arrival from a different group waits in the controller's
+    /// `arrivals` queue until this drains. Empty when nothing is in
+    /// flight, in which case only chips render.
+    @Published var liveStack: [StoredNotification] = []
+    /// Convenience: topmost (most recent) live row, used by callers
+    /// that just need to know "is anything in flight" or want the
+    /// most recently arrived notification. Use `liveStack` for full
+    /// state including the older rows below it.
+    var inflight: StoredNotification? { liveStack.first }
     /// Notch geometry from the active display, used to size the
     /// per-chip and in-flight rectangles.
     @Published var notchSize: CGSize = .zero
@@ -36,10 +45,11 @@ final class NotchModel: ObservableObject {
     /// the retraction window so a just-dismissed notification can't
     /// "reappear" as a hover-list row.
     @Published var inRetraction: Bool = false
-    /// Stack id of the notification most recently ingested (whether
-    /// or not it played in flight). Used to expand the "right"
-    /// stack when the user hovers a generic part of the pill rather
-    /// than a specific slot. nil if no notification has arrived yet
-    /// or if the most-recent stack has since been emptied.
-    @Published var mostRecentStackID: String? = nil
+    /// Chipstack id of the notification most recently ingested
+    /// (whether or not it played in flight). Used to expand the
+    /// "right" chipstack when the user hovers a generic part of the
+    /// pill rather than a specific slot. nil if no notification has
+    /// arrived yet or if the most-recent chipstack has since been
+    /// emptied.
+    @Published var mostRecentChipstackID: String? = nil
 }
