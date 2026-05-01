@@ -118,6 +118,7 @@ struct NotchPillView: View {
                 visibleStacks: visibleStacks,
                 partialSlotID: partialSlotID,
                 effectiveHoveredID: effectiveHoveredID,
+                liveActiveID: visibleStacks.count >= 2 ? liveStack.first?.chipstackID : nil,
                 notchSize: notchSize,
                 shelfWidth: shelfWidth,
                 pillWidth: pillWidth,
@@ -133,6 +134,7 @@ struct NotchPillView: View {
                     notchHeight: notchSize.height
                 )
             }
+
 
             if let hs = hoveredStack {
                 HoverListView(
@@ -155,6 +157,8 @@ struct NotchPillView: View {
         .animation(.easeOut(duration: 0.2), value: stacks.count)
         .animation(.easeOut(duration: 0.15), value: pillHeight)
         .animation(.easeOut(duration: 0.18), value: hoveredChipstackID)
+        .animation(.easeOut(duration: 0.2), value: liveStack.first?.chipstackID)
+        .animation(.easeInOut(duration: 0.28), value: liveStack.first?.id)
         .onHover { hovering in handlePillHover(hovering) }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
         .onChange(of: model.chipstacks.map(\.id)) { newIDs in
@@ -195,7 +199,9 @@ struct NotchPillView: View {
                 onHover: onInflightHover
             )
             .id(top.id)
-            .transition(.opacity)
+            // Outgoing body fades + slides up; incoming body fades
+            // in + slides down (enters from above its final spot).
+            .transition(.opacity.combined(with: .offset(y: -10)))
         }
     }
 
@@ -204,6 +210,7 @@ struct NotchPillView: View {
         visibleStacks: [ChipStack],
         partialSlotID: String?,
         effectiveHoveredID: String?,
+        liveActiveID: String?,
         notchSize: CGSize,
         shelfWidth: CGFloat,
         pillWidth: CGFloat,
@@ -213,10 +220,12 @@ struct NotchPillView: View {
             ForEach(visibleStacks) { stack in
                 let isPartial = (stack.id == partialSlotID)
                 let isExpandedStack = (stack.id == effectiveHoveredID)
+                let isLiveActive = (stack.id == liveActiveID)
                 SlotIconView(
                     stack: stack,
                     notchHeight: notchSize.height,
-                    isExpanded: isExpandedStack
+                    isExpanded: isExpandedStack,
+                    isLiveActive: isLiveActive
                 )
                     .frame(width: Self.slotWidth, height: notchSize.height)
                     .opacity(isPartial ? 0.4 : 1)
