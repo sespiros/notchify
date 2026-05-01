@@ -9,37 +9,10 @@ private final class FirstMouseHosting<Content: View>: NSHostingView<Content> {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
-/// One queued/in-flight notification with an identity stable across
-/// the data model. The id lets the SwiftUI side address a specific
-/// row when rendering the expanded list and lets focus-detection
-/// dismiss a single row out of a stack.
-struct StoredNotification: Identifiable {
-    let id = UUID()
-    let message: Message
-    let stackID: String
-    let arrivedAt = Date()
-}
-
-/// All notifications sharing a chip slot. `id` is "g:<group>" for
-/// named groups or "a:_anon" for the shared anonymous chip.
-/// `notifications` is newest-first to match the standard
-/// notification-center sort.
-struct NotificationStack: Identifiable {
-    let id: String
-    let isAnonymous: Bool
-    var notifications: [StoredNotification] = []
-
-    /// Resolved chip icon and color, locked from the *first*
-    /// notification that supplied them. Subsequent notifications
-    /// can't repaint the slot.
-    var resolvedIcon: String?
-    var resolvedColor: String?
-}
-
 @MainActor
 final class NotchController {
     private let panel: NSPanel
-    private let hosting: FirstMouseHosting<AnyView>
+    private let hosting: FirstMouseHosting<NotchPillView>
     private let model = NotchModel()
 
     /// Authoritative stack store keyed by stackID. The model's `stacks`
@@ -67,6 +40,10 @@ final class NotchController {
     /// `midSlide` should silently queue) from "mid-teardown that was
     /// cancelled" (where the new arrival should publish + start now).
     private var slideInTask: Task<Void, Never>?
+    /// Teardown task scheduled after the last slot retracts so the pill
+    /// can finish its slide-up before `orderOut` fires. Tracked so a
+    /// fresh arrival can cancel it mid-teardown.
+    private var teardownTask: Task<Void, Never>?
     /// 1 Hz poll that auto-dismisses `-focus` notifications once the
     /// user visits their source. Runs only while there are
     /// dismissKey-bearing rows in the stacks.
@@ -98,22 +75,30 @@ final class NotchController {
         panel.hidesOnDeactivate = false
         panel.animationBehavior = .none
 
-        hosting = FirstMouseHosting(rootView: AnyView(EmptyView()))
+        // Build a placeholder typed view first; we rebind with closures
+        // that capture self once init completes (closures can't reference
+        // self before all stored properties are initialized).
+        hosting = FirstMouseHosting(
+            rootView: NotchPillView(
+                model: model,
+                onClick: { _ in },
+                onRowClick: { _ in },
+                onChipClick: { _ in }
+            )
+        )
         hosting.frame = NSRect(origin: .zero, size: panelSize)
         hosting.autoresizingMask = [.width, .height]
         panel.contentView = hosting
 
         // Bind the unified pill view to the model exactly once.
         // Subsequent updates flow via @Published mutations on `model`.
-        hosting.rootView = AnyView(
-            NotchPillView(
-                model: model,
-                onClick: { [weak self] n in self?.handleClick(n) },
-                onRowClick: { [weak self] n in self?.handleRowClick(n) },
-                onChipClick: { [weak self] stackID in self?.handleChipClick(stackID) },
-                onInflightHover: { [weak self] hovering in self?.handleInflightHover(hovering) },
-                onEngagementChange: { [weak self] engaged in self?.handleEngagementChange(engaged) }
-            )
+        hosting.rootView = NotchPillView(
+            model: model,
+            onClick: { [weak self] n in self?.handleClick(n) },
+            onRowClick: { [weak self] n in self?.handleRowClick(n) },
+            onChipClick: { [weak self] stackID in self?.handleChipClick(stackID) },
+            onInflightHover: { [weak self] hovering in self?.handleInflightHover(hovering) },
+            onEngagementChange: { [weak self] engaged in self?.handleEngagementChange(engaged) }
         )
     }
 
@@ -588,7 +573,6 @@ final class NotchController {
             self.teardownTask = nil
         }
     }
-    private var teardownTask: Task<Void, Never>?
 
     private func isPersistent(_ n: StoredNotification) -> Bool {
         if let t = n.message.timeout, t == 0 { return true }
@@ -629,9 +613,13 @@ final class NotchController {
             return
         }
         let task = Process()
-        task.launchPath = "/bin/sh"
+        task.executableURL = URL(fileURLWithPath: "/bin/sh")
         task.arguments = ["-c", action]
-        try? task.run()
+        do {
+            try task.run()
+        } catch {
+            NSLog("%@", "notchify: action failed: \(error.localizedDescription)")
+        }
     }
 
     private static let maxNotchWidth: CGFloat = 320
