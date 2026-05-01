@@ -78,6 +78,14 @@ struct NotchPillView: View {
     /// with the viewport width and offset, drives the trailing-edge
     /// fade.
     @State private var shelfContentWidth: CGFloat = 0
+    /// ID of the chipstack to scroll to when a fresh chip arrives.
+    /// Set by the chipstacks .onChange handler whenever the count
+    /// grows. Used as a fallback scroll target when there's no
+    /// live-active chip (e.g. during hover). Distinct from the
+    /// live-active fallback, which would zig-zag during same-
+    /// chipstack body swaps because chipstacks.last doesn't change
+    /// in that case but liveActiveID briefly becomes nil.
+    @State private var lastArrivalScrollID: String? = nil
 
     var body: some View {
         let stacks = model.chipstacks
@@ -140,6 +148,7 @@ struct NotchPillView: View {
                 liveActiveID: (stacks.count >= 2 && hoveredStack == nil)
                     ? liveStack.first?.chipstackID
                     : nil,
+                arrivalTargetID: lastArrivalScrollID,
                 hasOverflow: hasOverflow,
                 notchSize: notchSize,
                 shelfWidth: shelfWidth,
@@ -187,6 +196,12 @@ struct NotchPillView: View {
             if let id = hoveredChipstackID, !newIDs.contains(id) {
                 hoveredChipstackID = nil
             }
+            // Mark the newest chipstack as the next scroll target so
+            // arrivals during hover bring the new chip into view
+            // even though liveActiveID is suppressed in that state.
+            if let newest = newIDs.last {
+                lastArrivalScrollID = newest
+            }
         }
         .onChange(of: pillVisible) { newVisible in
             if !newVisible {
@@ -232,6 +247,7 @@ struct NotchPillView: View {
         chipstacks: [ChipStack],
         effectiveHoveredID: String?,
         liveActiveID: String?,
+        arrivalTargetID: String?,
         hasOverflow: Bool,
         notchSize: CGSize,
         shelfWidth: CGFloat,
@@ -242,22 +258,18 @@ struct NotchPillView: View {
         let maxScrollX = max(0, shelfContentWidth - shelfWidth)
         let trailingFadeActive = shelfScrollOffset < maxScrollX - 1
         let scrollTargetX: CGFloat? = {
-            // Only auto-scroll when there's a currently-active body.
-            // If the livestack is empty (e.g., between same-group
-            // body swaps, or between queued different-group
-            // drains), leaving the shelf where it is avoids a
-            // jarring zig back to a fallback target like "newest"
-            // and then forward again to the next active.
-            guard let id = liveActiveID,
+            // Prefer the active livestack chip (centers the body's
+            // chip in the viewport). Fall back to the most-recently
+            // arrived chip when the livestack target is suppressed
+            // (e.g., during hover), so a fresh arrival lands in
+            // view instead of past the trailing fade. Same-
+            // chipstack body swaps don't change `arrivalTargetID`
+            // so they don't trigger a zig-zag.
+            let targetID = liveActiveID ?? arrivalTargetID
+            guard let id = targetID,
                   let idx = chipstacks.firstIndex(where: { $0.id == id }) else {
                 return nil
             }
-            // Center the active chip in the viewport so it lands
-            // outside both fade gradients. Clamping in the
-            // representable handles the corner cases (first chip
-            // pinned at leading, last chip pinned at trailing),
-            // where the "in-the-corner" fade going clear is
-            // expected.
             let chipCenter = Self.shelfPaddingLeft
                 + CGFloat(idx) * (Self.slotWidth + Self.slotSpacing)
                 + Self.slotWidth / 2
