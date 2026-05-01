@@ -89,11 +89,11 @@ else
 fi
 
 if [ "$state" = blocked ]; then
-  notchify -title "$title" -text "$body" -sound warning \
-           -symbol exclamationmark.triangle.fill -color orange \
-           -focus &
+  notchify "$title" "$body" -sound warning \
+           -icon exclamationmark.triangle.fill -color orange \
+           -group "${session:-claude}" -focus &
 else
-  notchify -title "$title" -text "$body" -sound ready \
-           -symbol checkmark.circle.fill -color green \
-           -focus &
+  notchify "$title" "$body" -sound ready \
+           -icon checkmark.circle.fill -color green \
+           -group "${session:-claude}" -focus &
 fi
