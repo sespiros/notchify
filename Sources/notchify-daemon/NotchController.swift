@@ -297,24 +297,17 @@ final class NotchController {
     /// One tick of the focus poll: dismiss any rows whose dismissKey
     /// matches what the user is currently looking at.
     private func checkFocus() {
-        let bundle = FocusDetector.frontmostBundleID()
-        // Cache active panes per tmux socket so we make at most one
-        // tmux subprocess per server, regardless of how many rows
-        // reference it.
-        var paneCache: [String?: Set<String>] = [:]
-        let provider: (String?) -> Set<String> = { socket in
-            if let cached = paneCache[socket] { return cached }
-            let panes = FocusDetector.activeTmuxPanes(socket: socket)
-            paneCache[socket] = panes
-            return panes
-        }
+        // FocusSnapshot caches expensive probes (tmux subprocess,
+        // AppleScript) per tick, so multiple rows referencing the
+        // same server / Ghostty cost just one probe each.
+        let snapshot = FocusSnapshot.capture()
 
         var toDismiss: [StoredNotification] = []
         for chipstackID in chipstackOrder {
             guard let stack = chipstacks[chipstackID] else { continue }
             for n in stack.notifications {
                 if let key = n.message.dismissKey,
-                   FocusDetector.matches(key, bundle: bundle, activePanesProvider: provider) {
+                   FocusDetector.matches(key, snapshot: snapshot) {
                     toDismiss.append(n)
                 }
             }

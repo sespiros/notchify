@@ -3,20 +3,39 @@ import Foundation
 
 /// Resolves "what is the user currently looking at?" so the daemon
 /// can auto-dismiss `-focus` notifications when the user visits the
-/// source. The dismiss-key on each notification is matched against:
+/// source.
 ///
-/// - `bundle`: the frontmost application's bundle id.
-/// - `tmuxPane` (optional): if set, the pane must additionally be
-///   the currently-active pane of *some* attached tmux client. We
-///   intentionally accept any attached client because we can't tell,
-///   without Accessibility, which terminal window is hosting which
-///   tmux client.
+/// This file is the orchestrator and the home of the low-level OS
+/// probes. The actual matching logic lives in per-feature detectors
+/// under `Focus/` (one file each, mirroring the CLI's
+/// `Sources/notchify/Focus/` provider layout). To support a new
+/// terminal or multiplexer, add a new detector there; nothing in
+/// this file should need to change.
 ///
-/// Cost: a single `tmux list-clients` subprocess per poll, plus an
-/// NSWorkspace lookup. The poll runs at 1 Hz and only while there
-/// are focus-bearing notifications, so the steady-state cost is zero.
+/// Cost: one CGWindowList lookup per poll, plus at most one tmux
+/// subprocess and one AppleScript invocation per poll (both lazy via
+/// `FocusSnapshot`). The poll runs at 1 Hz only while there are
+/// focus-bearing notifications, so the steady-state cost is zero.
 @MainActor
 enum FocusDetector {
+    /// True iff the user's current focus matches `key`, per the
+    /// composed verdict of all registered detectors. A key matches
+    /// when every non-abstaining detector votes true and at least one
+    /// detector voted at all.
+    static func matches(
+        _ key: DismissKey,
+        snapshot: FocusSnapshot,
+        providers: [FocusDetectorProvider] = registeredFocusDetectors
+    ) -> Bool {
+        var anyVoted = false
+        for provider in providers {
+            guard let vote = provider.matches(key: key, snapshot: snapshot) else { continue }
+            anyVoted = true
+            if !vote { return false }
+        }
+        return anyVoted
+    }
+
     /// Bundle id of the application owning the user-visible frontmost
     /// window. Falls back to NSWorkspace's frontmostApplication.
     /// Tiling window managers like Aerospace don't always change the
@@ -83,57 +102,6 @@ enum FocusDetector {
         return panes
     }
 
-    /// True iff the given dismiss-key matches the current focus.
-    /// `activePanesProvider` is invoked lazily (and at most once per
-    /// distinct socket per call) so the caller can cache results
-    /// across many rows that share a tmux server.
-    ///
-    /// True iff the dismiss-key matches the user's current focus.
-    ///
-    /// Both layers must agree:
-    /// - **Window**: the Ghostty window the user is currently
-    ///   looking at must be the source window. We ask AppleScript
-    ///   for the windows list and match the first element (Ghostty
-    ///   orders that list focus-first, and the ordering updates on
-    ///   Aerospace workspace switches — unlike `front terminal`).
-    ///   The check is "title contains source tty short form",
-    ///   relying on the user's tmux config to embed `client_tty`
-    ///   in the window title.
-    /// - **Pane**: at least one attached tmux session must be on
-    ///   the source pane. This catches same-window-different-pane
-    ///   (any session on source pane = user is or recently was on
-    ///   it). It's intentionally lenient because the window-level
-    ///   check above already rules out the multi-Ghostty
-    ///   false-positive — when the user is on a *different*
-    ///   Ghostty window, the title won't contain the source tty
-    ///   no matter what tmux's pane state looks like.
-    ///
-    /// For non-Ghostty bundles, skip the AppleScript step and
-    /// fall back to lenient tmux. If tmux returns nothing, refuse
-    /// to match rather than dismiss on bundle alone.
-    static func matches(
-        _ key: DismissKey,
-        bundle: String?,
-        activePanesProvider: (String?) -> Set<String>,
-        ghosttyFocusedTitleProvider: @MainActor () -> String? = ghosttyFocusedWindowTitle
-    ) -> Bool {
-        guard let bundle, key.bundle == bundle else { return false }
-        // Window-level disambiguation only matters when tmux is in
-        // play (multiple Ghostty windows can each host a client of
-        // the same server, and a lenient pane match would otherwise
-        // dismiss from any of them). Outside tmux we have no reliable
-        // signal that a user-set window title contains the source
-        // tty, so requiring it would just suppress every dismissal.
-        if bundle == "com.mitchellh.ghostty", key.tmuxPane != nil, let tty = key.tty {
-            guard let title = ghosttyFocusedTitleProvider() else { return false }
-            guard title.contains(shortTTY(tty)) else { return false }
-        }
-        guard let pane = key.tmuxPane else { return true }
-        let panes = activePanesProvider(key.tmuxSocket)
-        guard !panes.isEmpty else { return false }
-        return panes.contains(pane)
-    }
-
     /// Title of Ghostty's currently-focused window.
     /// `tell app … to get name of windows` returns the windows in
     /// z-order with the focused one first (verified empirically;
@@ -148,12 +116,6 @@ enum FocusDetector {
         )
         guard r.exitCode == 0 else { return nil }
         return r.stdout?.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    /// `/dev/ttys003` → `ttys003`. Match origin/main's
-    /// `#{s|/dev/||:client_tty}` convention.
-    private static func shortTTY(_ tty: String) -> String {
-        return tty.hasPrefix("/dev/") ? String(tty.dropFirst("/dev/".count)) : tty
     }
 
     private static func resolveTmuxBinary() -> String? {
