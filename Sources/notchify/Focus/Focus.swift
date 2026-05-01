@@ -73,6 +73,7 @@ struct FocusResult {
 struct DismissKeyPayload: Codable {
     let bundle: String
     let tmuxPane: String?
+    let tmuxSocket: String?
 }
 
 /// Build the click-action shell string and dismiss-key for `-focus`.
@@ -95,7 +96,21 @@ func buildFocus(env: [String: String]) -> FocusResult {
     var key: DismissKeyPayload? = nil
     if let bundle = context.detectedBundle {
         let pane = env["TMUX_PANE"].flatMap { $0.isEmpty ? nil : $0 }
-        key = DismissKeyPayload(bundle: bundle, tmuxPane: pane)
+        // tmux's $TMUX env value is "<socket-path>,<pid>,<id>". We
+        // need the socket path so the daemon can pass `-S <path>` to
+        // its own tmux invocation. Without this the daemon would
+        // talk to whatever default-socket server its environment
+        // points at, which is often a different server than the
+        // user's (especially on Nix).
+        let tmuxSocket: String? = {
+            guard let tmuxEnv = env["TMUX"], !tmuxEnv.isEmpty else { return nil }
+            return tmuxEnv.split(separator: ",", maxSplits: 1).first.map(String.init)
+        }()
+        key = DismissKeyPayload(
+            bundle: bundle,
+            tmuxPane: pane,
+            tmuxSocket: pane != nil ? tmuxSocket : nil
+        )
     }
 
     return FocusResult(action: action, dismissKey: key)

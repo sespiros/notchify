@@ -67,6 +67,10 @@ final class NotchController {
     /// `midSlide` should silently queue) from "mid-teardown that was
     /// cancelled" (where the new arrival should publish + start now).
     private var slideInTask: Task<Void, Never>?
+    /// 1 Hz poll that auto-dismisses `-focus` notifications once the
+    /// user visits their source. Runs only while there are
+    /// dismissKey-bearing rows in the stacks.
+    private var focusTimer: Timer?
 
     init() {
         // Pre-allocate enough horizontal room for the notch plus a row
@@ -127,6 +131,24 @@ final class NotchController {
             ensurePanelOnScreen()
             publishStacks()
             return
+        }
+
+        // Already-focused-at-arrival → drop. If the user is already
+        // looking at the source, the notification's job is done
+        // before the slide-in even starts.
+        if let key = message.dismissKey {
+            let bundle = FocusDetector.frontmostBundleID()
+            var paneCache: [String?: Set<String>] = [:]
+            let provider: (String?) -> Set<String> = { socket in
+                if let cached = paneCache[socket] { return cached }
+                let panes = FocusDetector.activeTmuxPanes(socket: socket)
+                paneCache[socket] = panes
+                return panes
+            }
+            if FocusDetector.matches(key, bundle: bundle, activePanesProvider: provider) {
+                NSLog("%@", "notchify: \"\(message.title)\" — source already focused, dropping")
+                return
+            }
         }
 
         // Cancel any in-progress teardown so a freshly arrived
@@ -261,6 +283,71 @@ final class NotchController {
         // when the last stack is later removed.
         if !model.stacks.isEmpty {
             model.forcedVisible = false
+        }
+        updateFocusTimer()
+    }
+
+    /// Start/stop the focus poll based on whether any notification in
+    /// the current stacks carries a dismissKey. Idempotent.
+    private func updateFocusTimer() {
+        let needsPoll = stacks.values.contains { stack in
+            stack.notifications.contains { $0.message.dismissKey != nil }
+        }
+        if needsPoll {
+            if focusTimer == nil {
+                let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
+                    Task { @MainActor in self?.checkFocus() }
+                }
+                timer.tolerance = 0.2
+                RunLoop.main.add(timer, forMode: .common)
+                focusTimer = timer
+            }
+        } else {
+            focusTimer?.invalidate()
+            focusTimer = nil
+        }
+    }
+
+    /// One tick of the focus poll: dismiss any rows whose dismissKey
+    /// matches what the user is currently looking at.
+    private func checkFocus() {
+        let bundle = FocusDetector.frontmostBundleID()
+        // Cache active panes per tmux socket so we make at most one
+        // tmux subprocess per server, regardless of how many rows
+        // reference it.
+        var paneCache: [String?: Set<String>] = [:]
+        let provider: (String?) -> Set<String> = { socket in
+            if let cached = paneCache[socket] { return cached }
+            let panes = FocusDetector.activeTmuxPanes(socket: socket)
+            paneCache[socket] = panes
+            return panes
+        }
+
+        var toDismiss: [StoredNotification] = []
+        for stackID in stackOrder {
+            guard let stack = stacks[stackID] else { continue }
+            for n in stack.notifications {
+                if let key = n.message.dismissKey,
+                   FocusDetector.matches(key, bundle: bundle, activePanesProvider: provider) {
+                    toDismiss.append(n)
+                }
+            }
+        }
+        guard !toDismiss.isEmpty else { return }
+
+        for n in toDismiss {
+            if model.inflight?.id == n.id {
+                // Remove from stack first so cleanup's removeNotification
+                // is a no-op; then play the in-flight retract.
+                removeNotification(n)
+                beginRetraction(of: n, viaClick: true)
+            } else {
+                removeNotification(n)
+            }
+        }
+        publishStacks()
+        if stacks.isEmpty && model.inflight == nil {
+            scheduleEndOfPillRetract()
         }
     }
 

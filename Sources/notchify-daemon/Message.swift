@@ -6,6 +6,11 @@ struct DismissKey: Codable, Equatable {
     // inside tmux, nil otherwise. When set, focus-dismissal also
     // requires this pane to be the active pane of an attached session.
     let tmuxPane: String?
+    // tmux server socket path (extracted from the caller's $TMUX env
+    // var). The daemon passes this as `tmux -S <path>` so it queries
+    // the user's actual server, not whatever default-socket server
+    // the daemon's environment happens to find.
+    let tmuxSocket: String?
 }
 
 struct Message: Codable {

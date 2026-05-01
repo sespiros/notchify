@@ -82,7 +82,13 @@ See [BUILDING.md](BUILDING.md).
   Older groups beyond that are tracked in the data model but not shown.
 - Inside a stack, up to ~3.5 rows are visible at once and the rest
   scroll, with a soft top/bottom fade indicating overflow.
-- Do-Not-Disturb active: drops silently.
+- `-focus` notifications are auto-dismissed once the user visits the
+  source: the daemon polls the frontmost app (and, when captured at
+  fire time, the active tmux pane) once a second and removes any
+  rows whose dismiss-key matches. Already on the source at fire
+  time? The notification is dropped silently.
+- Do-Not-Disturb active: ingested into its chip silently (no body,
+  no sound) so the user can read it once DND clears.
 - Renders only when macOS reports an active built-in notched display.
 - Uses macOS screen geometry APIs to anchor the overlay to the
   built-in notch area, even with an external monitor attached.
