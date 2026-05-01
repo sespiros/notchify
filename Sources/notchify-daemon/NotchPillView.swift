@@ -71,19 +71,34 @@ struct NotchPillView: View {
     /// Cached drop height keyed by inflight id. Avoids running the
     /// NSAttributedString boundingRect call on every body re-render.
     @State private var inflightDropCache: (id: UUID, height: CGFloat)? = nil
+    /// Live mirror of the chip shelf's clip-view bounds.origin.x.
+    /// Drives the leading-edge fade.
+    @State private var shelfScrollOffset: CGFloat = 0
+    /// Live mirror of the chip shelf's document width. Combined
+    /// with the viewport width and offset, drives the trailing-edge
+    /// fade.
+    @State private var shelfContentWidth: CGFloat = 0
 
     var body: some View {
         let stacks = model.chipstacks
         let notchSize = model.notchSize
 
         let total = stacks.count
-        let hasPartialSlot = total > Self.maxVisibleSlots
-        let visibleStacks = Array(
-            stacks.suffix(Self.maxVisibleSlots + (hasPartialSlot ? 1 : 0))
-        )
-        let partialSlotID: String? = hasPartialSlot ? visibleStacks.first?.id : nil
-        let shelfWidth = NotchPillView.shelfWidthFor(slotCount: visibleStacks.count)
+        // Shelf viewport: grows linearly up to maxVisibleSlots, then
+        // caps at "2 chips fully + a half-slot peek" past that. The
+        // trailing fade gradient then covers the peeking chip so it
+        // looks semi-faded, indicating "more chips beyond." This way
+        // a new chip arriving while a body is active doesn't trigger
+        // a fresh layout slide as the pill keeps growing.
+        let shelfWidth: CGFloat = {
+            if total <= Self.maxVisibleSlots {
+                return Self.shelfWidthFor(slotCount: total)
+            }
+            return Self.shelfWidthFor(slotCount: Self.maxVisibleSlots)
+                + Self.slotSpacing + Self.slotWidth / 2
+        }()
         let pillWidth = notchSize.width + shelfWidth
+        let hasOverflow = total > Self.maxVisibleSlots
         let liveStack = model.liveStack
         let isInflight = !liveStack.isEmpty
 
@@ -115,10 +130,10 @@ struct NotchPillView: View {
             .frame(width: pillWidth, height: pillHeight)
 
             slotShelf(
-                visibleStacks: visibleStacks,
-                partialSlotID: partialSlotID,
+                chipstacks: stacks,
                 effectiveHoveredID: effectiveHoveredID,
-                liveActiveID: visibleStacks.count >= 2 ? liveStack.first?.chipstackID : nil,
+                liveActiveID: stacks.count >= 2 ? liveStack.first?.chipstackID : nil,
+                hasOverflow: hasOverflow,
                 notchSize: notchSize,
                 shelfWidth: shelfWidth,
                 pillWidth: pillWidth,
@@ -207,44 +222,87 @@ struct NotchPillView: View {
 
     @ViewBuilder
     private func slotShelf(
-        visibleStacks: [ChipStack],
-        partialSlotID: String?,
+        chipstacks: [ChipStack],
         effectiveHoveredID: String?,
         liveActiveID: String?,
+        hasOverflow: Bool,
         notchSize: CGSize,
         shelfWidth: CGFloat,
         pillWidth: CGFloat,
         pillHeight: CGFloat
     ) -> some View {
-        HStack(spacing: Self.slotSpacing) {
-            ForEach(visibleStacks) { stack in
-                let isPartial = (stack.id == partialSlotID)
-                let isExpandedStack = (stack.id == effectiveHoveredID)
-                let isLiveActive = (stack.id == liveActiveID)
-                SlotIconView(
-                    stack: stack,
-                    notchHeight: notchSize.height,
-                    isExpanded: isExpandedStack,
-                    isLiveActive: isLiveActive
-                )
-                    .frame(width: Self.slotWidth, height: notchSize.height)
-                    .opacity(isPartial ? 0.4 : 1)
-                    .contentShape(Rectangle())
-                    .accessibilityAddTraits(.isButton)
-                    .accessibilityLabel("Show \(stack.id) notifications")
-                    .onTapGesture { onChipClick(stack.id) }
-                    .onHover { hovering in handleHover(stack.id, hovering) }
-                    .transition(
-                        .asymmetric(
-                            insertion: .opacity.animation(.easeIn(duration: 0.12)),
-                            removal: .opacity.animation(.easeOut(duration: 0.13))
-                        )
-                    )
+        let leadingFadeActive = shelfScrollOffset > 1
+        let maxScrollX = max(0, shelfContentWidth - shelfWidth)
+        let trailingFadeActive = shelfScrollOffset < maxScrollX - 1
+        let scrollTargetX: CGFloat? = {
+            // Only auto-scroll when there's a currently-active body.
+            // If the livestack is empty (e.g., between same-group
+            // body swaps, or between queued different-group
+            // drains), leaving the shelf where it is avoids a
+            // jarring zig back to a fallback target like "newest"
+            // and then forward again to the next active.
+            guard let id = liveActiveID,
+                  let idx = chipstacks.firstIndex(where: { $0.id == id }) else {
+                return nil
             }
+            // Center the active chip in the viewport so it lands
+            // outside both fade gradients. Clamping in the
+            // representable handles the corner cases (first chip
+            // pinned at leading, last chip pinned at trailing),
+            // where the "in-the-corner" fade going clear is
+            // expected.
+            let chipCenter = Self.shelfPaddingLeft
+                + CGFloat(idx) * (Self.slotWidth + Self.slotSpacing)
+                + Self.slotWidth / 2
+            return chipCenter - shelfWidth / 2
+        }()
+        HorizontalChipScroll(
+            viewportWidth: shelfWidth,
+            viewportHeight: notchSize.height,
+            scrollTargetX: scrollTargetX,
+            scrollOffset: $shelfScrollOffset,
+            contentWidth: $shelfContentWidth
+        ) {
+            HStack(spacing: Self.slotSpacing) {
+                ForEach(chipstacks) { stack in
+                    let isExpandedStack = (stack.id == effectiveHoveredID)
+                    let isLiveActive = (stack.id == liveActiveID)
+                    SlotIconView(
+                        stack: stack,
+                        notchHeight: notchSize.height,
+                        isExpanded: isExpandedStack,
+                        isLiveActive: isLiveActive
+                    )
+                        .frame(width: Self.slotWidth, height: notchSize.height)
+                        .contentShape(Rectangle())
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityLabel("Show \(stack.id) notifications")
+                        .onTapGesture { onChipClick(stack.id) }
+                        .onHover { hovering in handleHover(stack.id, hovering) }
+                        .transition(
+                            .asymmetric(
+                                insertion: .opacity.animation(.easeIn(duration: 0.12)),
+                                removal: .opacity.animation(.easeOut(duration: 0.13))
+                            )
+                        )
+                }
+            }
+            .padding(.leading, Self.shelfPaddingLeft)
+            .padding(.trailing, Self.shelfPaddingRight)
         }
-        .padding(.trailing, Self.shelfPaddingRight)
-        .frame(width: shelfWidth, height: notchSize.height, alignment: .trailing)
-        .clipped()
+        .frame(width: shelfWidth, height: notchSize.height)
+        .mask(
+            LinearGradient(
+                stops: [
+                    .init(color: leadingFadeActive ? .clear : .black, location: 0),
+                    .init(color: .black, location: 0.2),
+                    .init(color: .black, location: 0.8),
+                    .init(color: trailingFadeActive ? .clear : .black, location: 1.0),
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+        )
         .frame(width: pillWidth, height: pillHeight, alignment: .topLeading)
     }
 

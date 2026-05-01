@@ -165,22 +165,37 @@ fi
 # --- Overflow: 3+ groups → partial chip on left ------------------
 
 if run_section overflow; then
-    echo "[overflow] 4 groups → leftmost renders as 40% partial"
+    echo "[overflow] 8 groups, then second arrivals zig-zag through them"
+    echo "           to exercise the chip-shelf auto-scroll across the"
+    echo "           full range (oldest leftmost ↔ newest rightmost)."
 
-    "$N" "G1 first" -group g1 -icon 1.circle.fill -color red    -timeout 0
+    "$N" "G1 first" -group g1 -icon 1.circle.fill -color red     -timeout 0
     sleep 1
-    "$N" "G2 first" -group g2 -icon 2.circle.fill -color orange -timeout 0
+    "$N" "G2 first" -group g2 -icon 2.circle.fill -color orange  -timeout 0
     sleep 1
-    "$N" "G3 first" -group g3 -icon 3.circle.fill -color yellow -timeout 0
+    "$N" "G3 first" -group g3 -icon 3.circle.fill -color yellow  -timeout 0
     sleep 1
-    # Fourth group pushes G1 into the partial slot at the leftmost edge.
-    "$N" "G4 first" -group g4 -icon 4.circle.fill -color green  -timeout 0
+    "$N" "G4 first" -group g4 -icon 4.circle.fill -color green   -timeout 0
+    sleep 1
+    "$N" "G5 first" -group g5 -icon 5.circle.fill -color blue    -timeout 0
+    sleep 1
+    "$N" "G6 first" -group g6 -icon 6.circle.fill -color purple  -timeout 0
+    sleep 1
+    "$N" "G7 first" -group g7 -icon 7.circle.fill -color pink    -timeout 0
+    sleep 1
+    "$N" "G8 first" -group g8 -icon 8.circle.fill -color white   -timeout 0
     sleep 6
 
-    # Add one more in G1 — its chip is partial but the row is still
-    # there; you can hover the partial to see it.
-    "$N" "G1 second" "still in stack though chip is partial" \
-         -group g1 -timeout 0
+    # Zig-zag second arrivals: oldest, newest, near-oldest, near-newest.
+    # Each should auto-scroll the chip shelf so the active chip lands
+    # in view, then settle back to whatever's active next.
+    "$N" "G1 second" "scrolls all the way left" -group g1 -timeout 0
+    sleep 6
+    "$N" "G8 second" "scrolls all the way right" -group g8 -timeout 0
+    sleep 6
+    "$N" "G2 second" "scrolls one in from the left" -group g2 -timeout 0
+    sleep 6
+    "$N" "G7 second" "scrolls one in from the right" -group g7 -timeout 0
     sleep 6
 fi
 
