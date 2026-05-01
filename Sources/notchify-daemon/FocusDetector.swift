@@ -17,9 +17,31 @@ import Foundation
 /// are focus-bearing notifications, so the steady-state cost is zero.
 @MainActor
 enum FocusDetector {
-    /// Bundle id of the frontmost application, or nil if the system
-    /// can't determine one.
+    /// Bundle id of the application owning the user-visible frontmost
+    /// window. Falls back to NSWorkspace's frontmostApplication.
+    /// Tiling window managers like Aerospace don't always change the
+    /// macOS-level frontmost app when switching workspaces (they
+    /// show/hide windows without re-focusing), so a plain
+    /// NSWorkspace.frontmostApplication can lag the actual user
+    /// focus. CGWindowList's on-screen list, ordered by z-index,
+    /// reflects the truly visible top window and stays in sync with
+    /// workspace switches. The window-info pids are returned without
+    /// requiring Screen Recording permission (only window titles
+    /// would).
     static func frontmostBundleID() -> String? {
+        let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+        if let raw = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] {
+            for info in raw {
+                guard
+                    let layer = info[kCGWindowLayer as String] as? Int,
+                    layer == 0,
+                    let pid = info[kCGWindowOwnerPID as String] as? pid_t,
+                    let app = NSRunningApplication(processIdentifier: pid),
+                    let bundle = app.bundleIdentifier
+                else { continue }
+                return bundle
+            }
+        }
         return NSWorkspace.shared.frontmostApplication?.bundleIdentifier
     }
 
@@ -27,17 +49,38 @@ enum FocusDetector {
     /// attached client of the tmux server at `socket`. If `socket`
     /// is nil, queries tmux's default socket. Empty when tmux isn't
     /// installed or the server has no attached clients.
+    ///
+    /// Uses `list-panes -a` instead of `list-clients` because the
+    /// latter returns empty in some wrapper setups (notably byobu)
+    /// even when clients are clearly attached, making it useless as
+    /// a focus signal. `list-panes -a` enumerates every pane on the
+    /// server; we pick the ones that are both their window's
+    /// `pane_active` and live in a session whose `session_attached`
+    /// count is non-zero. That gives the same semantic answer as
+    /// "active panes across attached clients" without depending on
+    /// the brittle list-clients output.
     static func activeTmuxPanes(socket: String?) -> Set<String> {
         guard let tmux = resolveTmuxBinary() else { return [] }
         var args: [String] = []
         if let socket {
             args.append(contentsOf: ["-S", socket])
         }
-        args.append(contentsOf: ["list-clients", "-F", "#{client_active_pane}"])
+        args.append(contentsOf: [
+            "list-panes", "-a", "-F",
+            "#{pane_active} #{window_active} #{session_attached} #{pane_id}"
+        ])
         let result = runProcess(tmux, args)
         if result.exitCode != 0 { return [] }
-        let stdout = result.stdout?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return Set(stdout.split(separator: "\n").map(String.init).filter { !$0.isEmpty })
+        var panes: Set<String> = []
+        for line in (result.stdout ?? "").split(separator: "\n") {
+            let parts = line.split(separator: " ").map(String.init)
+            guard parts.count >= 4 else { continue }
+            guard parts[0] == "1" else { continue }     // pane_active
+            guard parts[1] == "1" else { continue }     // window_active
+            guard parts[2] != "0" else { continue }     // session_attached > 0
+            panes.insert(parts[3])
+        }
+        return panes
     }
 
     /// True iff the given dismiss-key matches the current focus.
@@ -45,27 +88,66 @@ enum FocusDetector {
     /// distinct socket per call) so the caller can cache results
     /// across many rows that share a tmux server.
     ///
-    /// Pragmatic fallback: if the dismiss-key has a tmuxPane but the
-    /// tmux server returns no clients (which can happen when a
-    /// daemon-spawned subprocess queries tmux even though the user
-    /// is genuinely attached), we fall back to bundle-only matching.
-    /// Misses the per-pane precision but doesn't leave persistent
-    /// notifications stuck on screen forever.
+    /// True iff the dismiss-key matches the user's current focus.
+    ///
+    /// Both layers must agree:
+    /// - **Window**: the Ghostty window the user is currently
+    ///   looking at must be the source window. We ask AppleScript
+    ///   for the windows list and match the first element (Ghostty
+    ///   orders that list focus-first, and the ordering updates on
+    ///   Aerospace workspace switches — unlike `front terminal`).
+    ///   The check is "title contains source tty short form",
+    ///   relying on the user's tmux config to embed `client_tty`
+    ///   in the window title.
+    /// - **Pane**: at least one attached tmux session must be on
+    ///   the source pane. This catches same-window-different-pane
+    ///   (any session on source pane = user is or recently was on
+    ///   it). It's intentionally lenient because the window-level
+    ///   check above already rules out the multi-Ghostty
+    ///   false-positive — when the user is on a *different*
+    ///   Ghostty window, the title won't contain the source tty
+    ///   no matter what tmux's pane state looks like.
+    ///
+    /// For non-Ghostty bundles, skip the AppleScript step and
+    /// fall back to lenient tmux. If tmux returns nothing, refuse
+    /// to match rather than dismiss on bundle alone.
     static func matches(
         _ key: DismissKey,
         bundle: String?,
-        activePanesProvider: (String?) -> Set<String>
+        activePanesProvider: (String?) -> Set<String>,
+        ghosttyFocusedTitleProvider: @MainActor () -> String? = ghosttyFocusedWindowTitle
     ) -> Bool {
         guard let bundle, key.bundle == bundle else { return false }
+        if bundle == "com.mitchellh.ghostty", let tty = key.tty {
+            guard let title = ghosttyFocusedTitleProvider() else { return false }
+            guard title.contains(shortTTY(tty)) else { return false }
+        }
         guard let pane = key.tmuxPane else { return true }
         let panes = activePanesProvider(key.tmuxSocket)
-        if panes.isEmpty {
-            // Tmux had nothing to say about clients on this socket.
-            // Bundle already matched; consider the user "on the
-            // source" rather than ignoring the dismiss.
-            return true
-        }
+        guard !panes.isEmpty else { return false }
         return panes.contains(pane)
+    }
+
+    /// Title of Ghostty's currently-focused window.
+    /// `tell app … to get name of windows` returns the windows in
+    /// z-order with the focused one first (verified empirically;
+    /// Aerospace workspace switches update this ordering, while
+    /// `front terminal` does not). We return only the first item
+    /// rather than the whole list to keep the match scoped to the
+    /// actually-visible window.
+    static func ghosttyFocusedWindowTitle() -> String? {
+        let r = runProcess(
+            "/usr/bin/osascript",
+            ["-e", "tell application \"Ghostty\" to return name of first window"]
+        )
+        guard r.exitCode == 0 else { return nil }
+        return r.stdout?.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// `/dev/ttys003` → `ttys003`. Match origin/main's
+    /// `#{s|/dev/||:client_tty}` convention.
+    private static func shortTTY(_ tty: String) -> String {
+        return tty.hasPrefix("/dev/") ? String(tty.dropFirst("/dev/".count)) : tty
     }
 
     private static func resolveTmuxBinary() -> String? {

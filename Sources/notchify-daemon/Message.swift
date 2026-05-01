@@ -11,6 +11,14 @@ struct DismissKey: Codable, Equatable {
     // the user's actual server, not whatever default-socket server
     // the daemon's environment happens to find.
     let tmuxSocket: String?
+    // Caller's controlling tty (e.g. "/dev/ttys003"). For Ghostty
+    // (which doesn't expose a per-window tty property in 1.3.x),
+    // the daemon disambiguates terminal windows by asking
+    // AppleScript for the front Ghostty window's title and
+    // checking that it contains this tty's short form. Requires
+    // the user's tmux config to embed the client tty in the
+    // window title.
+    let tty: String?
 }
 
 struct Message: Codable {

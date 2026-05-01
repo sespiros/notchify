@@ -74,6 +74,7 @@ struct DismissKeyPayload: Codable {
     let bundle: String
     let tmuxPane: String?
     let tmuxSocket: String?
+    let tty: String?
 }
 
 /// Build the click-action shell string and dismiss-key for `-focus`.
@@ -109,7 +110,8 @@ func buildFocus(env: [String: String]) -> FocusResult {
         key = DismissKeyPayload(
             bundle: bundle,
             tmuxPane: pane,
-            tmuxSocket: pane != nil ? tmuxSocket : nil
+            tmuxSocket: pane != nil ? tmuxSocket : nil,
+            tty: context.callerTTY
         )
     }
 

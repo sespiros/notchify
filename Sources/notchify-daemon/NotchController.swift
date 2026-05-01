@@ -33,6 +33,13 @@ final class NotchController {
     /// the pill retract only when the live stack drains). Cancelled
     /// on click, on engagement (paused), and on screen-config change.
     private var dwellTasks: [UUID: Task<Void, Never>] = [:]
+    /// True from `startNext` removing an arrival until its delayed
+    /// reveal task assigns it to `liveStack`. Prevents a concurrent
+    /// drain from a different code path (a cleanup task and a fresh
+    /// `present` arriving in the gap, for example) from also calling
+    /// `startNext`, which would race the reveal tasks and stomp the
+    /// first row with the second.
+    private var startingNext: Bool = false
     /// Cleanup task scheduled after a retraction starts. Re-scheduled
     /// per retraction; tracked here only so `screenConfigurationDidChange`
     /// can cancel an in-flight teardown.
@@ -120,24 +127,6 @@ final class NotchController {
             return
         }
 
-        // Already-focused-at-arrival → drop. If the user is already
-        // looking at the source, the notification's job is done
-        // before the slide-in even starts.
-        if let key = message.dismissKey {
-            let bundle = FocusDetector.frontmostBundleID()
-            var paneCache: [String?: Set<String>] = [:]
-            let provider: (String?) -> Set<String> = { socket in
-                if let cached = paneCache[socket] { return cached }
-                let panes = FocusDetector.activeTmuxPanes(socket: socket)
-                paneCache[socket] = panes
-                return panes
-            }
-            if FocusDetector.matches(key, bundle: bundle, activePanesProvider: provider) {
-                NSLog("%@", "notchify: \"\(message.title)\" — source already focused, dropping")
-                return
-            }
-        }
-
         // Cancel any in-progress teardown so a freshly arrived
         // notification keeps the pill on screen instead of fighting
         // a slide-up.
@@ -153,18 +142,22 @@ final class NotchController {
 
         ensurePanelOnScreen()
 
-        // Always queue. Engagement just postpones playback; when the
-        // user disengages, the queue resumes naturally.
-        arrivals.append(notification)
-
         if model.isUserEngaged {
-            // While the user is reading the pill, update the chip
-            // badge / shelf but don't trigger phase c. The
-            // notification sits in `arrivals` and will be picked up
-            // once the user disengages (via handleEngagementChange).
+            // The user has the pill engaged (hovering). Update the
+            // chip count silently and otherwise stay out of their
+            // way. Auto-dismiss notifications still queue so they
+            // play through on disengage; persistent ones do NOT
+            // queue, so they sit silently as chips and won't be
+            // replayed when the user un-hovers (a stream of piled
+            // persistent rows replaying back-to-back was the worst
+            // case here).
+            if !isPersistent(notification) {
+                arrivals.append(notification)
+            }
             publishStacks()
             return
         }
+        arrivals.append(notification)
 
         // Three arrival regimes, picked by the *current* model state
         // (which the user sees right now):
@@ -328,11 +321,15 @@ final class NotchController {
 
         for n in toDismiss {
             if model.liveStack.contains(where: { $0.id == n.id }) {
-                // Remove from stack first so cleanup's removeNotification
-                // is a no-op; then play the live-row retract.
-                removeNotification(n)
+                // Body still visible: let beginRetraction drive the
+                // body-fade then chip-fade sequence (180ms apart) via
+                // its cleanup task. Calling removeNotification first
+                // would force the slot fade in the same frame as the
+                // body retract, which looks abrupt.
                 beginRetraction(of: n, viaClick: true)
             } else {
+                // Chip-only entry: SwiftUI's slot transition fades it
+                // out when publishStacks reflects the removal.
                 removeNotification(n)
             }
         }
@@ -367,13 +364,16 @@ final class NotchController {
 
     private func startNext(newStack: Bool) {
         guard model.liveStack.isEmpty else { return }
+        guard !startingNext else { return }
         guard !arrivals.isEmpty else { return }
+        startingNext = true
         let next = arrivals.removeFirst()
 
         guard ensurePanelOnScreen() else {
             NSLog("notchify: no active display, dropping \"\(next.message.title)\"")
             removeNotification(next)
             publishStacks()
+            startingNext = false
             startNext(newStack: false)
             return
         }
@@ -392,9 +392,7 @@ final class NotchController {
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: arrivalDelay)
             guard let self else { return }
-            // If engagement started during phase a/b, push the
-            // arrival back onto the queue. It resumes when the user
-            // disengages (handleEngagementChange picks it up).
+            defer { self.startingNext = false }
             if self.model.isUserEngaged {
                 self.arrivals.insert(next, at: 0)
                 return
@@ -434,16 +432,28 @@ final class NotchController {
     /// resume their normal lifecycle.
     private func handleEngagementChange(_ engaged: Bool) {
         if engaged {
-            // Pause every visible row's dwell. They restart from full
-            // duration on disengage.
+            // Hovering takes precedence: retract any currently-
+            // visible body so the user gets a clean chip-only view
+            // to inspect. The row stays in the chipstack regardless
+            // of persistence so focus-bearing notifications remain
+            // pollable for auto-dismiss, and so the user can
+            // still see the chip + open it via hover-list.
             cancelAllDwells()
+            if let top = model.liveStack.first {
+                beginRetraction(of: top, viaClick: false, keepInChipstack: true)
+            }
             return
         }
         // Disengaged: restart dwells for every live row, then drain
-        // any pending arrivals if the live stack is empty.
+        // pending arrivals — but drop persistent ones first. The
+        // user has been hovering, presumably reading the chips, so
+        // replaying a stream of piled persistent bodies one after
+        // another isn't what they want. Persistent arrivals already
+        // appear as chips via the ingest path; that's enough.
         for n in model.liveStack {
             scheduleDwell(for: n)
         }
+        arrivals.removeAll { isPersistent($0) }
         guard !arrivals.isEmpty, model.liveStack.isEmpty else { return }
         let nextIsNewStack = arrivals.first.map {
             chipstacks[$0.chipstackID]?.notifications.count == 1
@@ -512,12 +522,22 @@ final class NotchController {
     /// stack, the pill simply shrinks to fit them and we're done. If
     /// this was the last live row, fall into the full pill teardown
     /// path (drain queue or schedule slide-up).
-    private func beginRetraction(of n: StoredNotification, viaClick: Bool) {
+    /// `keepInChipstack` overrides the default
+    /// "auto-dismiss rows leave when their body retracts"
+    /// behavior so hover-driven retracts can hide the body without
+    /// erasing focus-bearing rows from the chipstack (which would
+    /// kill the focus poll's chance to auto-dismiss them later).
+    private func beginRetraction(
+        of n: StoredNotification,
+        viaClick: Bool,
+        keepInChipstack: Bool = false
+    ) {
         guard model.liveStack.contains(where: { $0.id == n.id }) else { return }
         dwellTasks[n.id]?.cancel()
         dwellTasks.removeValue(forKey: n.id)
 
-        let willRemoveFromChipStack = viaClick || !isPersistent(n)
+        let willRemoveFromChipStack =
+            !keepInChipstack && (viaClick || !isPersistent(n))
         // Pop the row from the live stack immediately so the view
         // animates its disappearance; the chip-stack mutation (if
         // any) waits until after the body fade so it doesn't race.
