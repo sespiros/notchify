@@ -54,7 +54,7 @@ struct NotchPillView: View {
     /// Hover lists cap at ~3.5 rows tall: 3 fully visible + half a
     /// row peeking below the bottom fade so it's clear there's more
     /// to scroll. Past that, content scrolls inside.
-    static let maxListHeight: CGFloat = 3.5 * rowHeight + listVerticalPadding * 2
+    static let maxListHeight: CGFloat = 3.5 * rowHeight
 
     @State private var hoveredChipstackID: String? = nil
     @State private var textVisible: Bool = false
@@ -70,7 +70,7 @@ struct NotchPillView: View {
     @State private var listScrollOffset: CGFloat = 0
     /// Cached drop height keyed by inflight id. Avoids running the
     /// NSAttributedString boundingRect call on every body re-render.
-    @State private var inflightDropCache: (id: UUID, height: CGFloat)? = nil
+    @State private var inflightDropCache: (id: UUID, height: CGFloat, pillWidth: CGFloat)? = nil
     /// Live mirror of the chip shelf's clip-view bounds.origin.x.
     /// Drives the leading-edge fade.
     @State private var shelfScrollOffset: CGFloat = 0
@@ -108,10 +108,10 @@ struct NotchPillView: View {
         }
         let hoverDropHeight: CGFloat = {
             guard let hs = hoveredStack else { return 0 }
-            let raw = CGFloat(hs.notifications.count) * Self.rowHeight + Self.listVerticalPadding * 2
+            let raw = CGFloat(hs.notifications.count) * Self.rowHeight
             return min(raw, Self.maxListHeight)
         }()
-        let inflightDropHeight = currentInflightDropHeight(notchSize: notchSize)
+        let inflightDropHeight = currentInflightDropHeight(notchSize: notchSize, pillWidth: pillWidth)
         let dropHeight = max(inflightDropHeight, hoverDropHeight)
         let pillHeight = notchSize.height + dropHeight
         let pillVisible = !stacks.isEmpty || isInflight || model.forcedVisible
@@ -188,7 +188,7 @@ struct NotchPillView: View {
                 model.isUserEngaged = false
             }
         }
-        .onChange(of: model.liveStack.first?.id) { _ in handleInflightChange() }
+        .onChange(of: model.liveStack.first?.id) { _ in handleInflightChange(pillWidth: pillWidth, notchSize: notchSize) }
     }
 
     /// Render the topmost livestack row in the pill drop area.
@@ -333,19 +333,28 @@ struct NotchPillView: View {
         return nil
     }
 
-    private func currentInflightDropHeight(notchSize: CGSize) -> CGFloat {
+    private func currentInflightDropHeight(notchSize: CGSize, pillWidth: CGFloat) -> CGFloat {
         guard let top = model.liveStack.first else { return 0 }
-        if let cached = inflightDropCache, cached.id == top.id {
+        if let cached = inflightDropCache, cached.id == top.id, cached.pillWidth == pillWidth {
             return cached.height
         }
-        return Self.measureDropHeight(text: top.message.text, notchSize: notchSize)
+        return Self.measureDropHeight(text: top.message.text, notchHeight: notchSize.height, pillWidth: pillWidth)
     }
 
-    private static func measureDropHeight(text: String?, notchSize: CGSize) -> CGFloat {
+    /// Compute the drop height needed to fit the in-flight body
+    /// inside the pill. The body renders at .padding(.horizontal, 9)
+    /// inside `pillWidth`, so the actual wrap width is `pillWidth -
+    /// 18`. Earlier this used `notchSize.width - 20` which
+    /// underestimates by the chip-shelf width and produced false
+    /// "needs two lines" positives — the body would wrap to one
+    /// line at render time but the pill reserved
+    /// `extraHeightTwoLine` worth of drop, leaving a chunk of
+    /// empty space below the text.
+    private static func measureDropHeight(text: String?, notchHeight: CGFloat, pillWidth: CGFloat) -> CGFloat {
         let body = text ?? ""
-        if body.isEmpty { return notchSize.height }
+        if body.isEmpty { return notchHeight }
         let font = NSFont.systemFont(ofSize: 11)
-        let availableWidth = max(notchSize.width - 20, 100)
+        let availableWidth = max(pillWidth - 18, 100)
         let attr = NSAttributedString(string: body, attributes: [.font: font])
         let rect = attr.boundingRect(
             with: CGSize(width: availableWidth, height: .greatestFiniteMagnitude),
@@ -378,10 +387,14 @@ struct NotchPillView: View {
         }
     }
 
-    private func handleInflightChange() {
+    private func handleInflightChange(pillWidth: CGFloat, notchSize: CGSize) {
         if let next = model.liveStack.first {
-            let height = Self.measureDropHeight(text: next.message.text, notchSize: model.notchSize)
-            inflightDropCache = (next.id, height)
+            let height = Self.measureDropHeight(
+                text: next.message.text,
+                notchHeight: notchSize.height,
+                pillWidth: pillWidth
+            )
+            inflightDropCache = (next.id, height, pillWidth)
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(50))
                 withAnimation(.easeIn(duration: 0.18)) { textVisible = true }

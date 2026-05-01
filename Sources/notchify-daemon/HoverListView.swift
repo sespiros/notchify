@@ -36,7 +36,6 @@ struct HoverListView: View {
                     .frame(height: NotchPillView.rowHeight)
                 }
             }
-            .padding(.vertical, NotchPillView.listVerticalPadding)
             .frame(width: pillWidth)
         }
         .frame(width: pillWidth, height: hoverDropHeight, alignment: .topLeading)

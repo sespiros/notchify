@@ -224,18 +224,20 @@ final class NotchController {
 
     private func chipstackIDFor(_ message: Message) -> String {
         if let g = message.group, !g.isEmpty { return "g:\(g)" }
-        // Ungrouped notifications:
-        // - If customized (any -icon or -color set), each gets its
-        //   own throwaway chip — treat the customization as an
-        //   implicit one-shot group.
-        // - If plain (no customization), coalesce under a shared
-        //   default chip so a flurry of vanilla notifications doesn't
-        //   spawn a chip per arrival.
-        let isCustomized = (message.icon != nil) || (message.color != nil)
-        if isCustomized {
-            return "a:\(UUID().uuidString)"
+        // Ungrouped notifications coalesce by their visual identity:
+        // - Plain (no icon/color): all share `a:_default`.
+        // - Customized: notifications with the same icon+color
+        //   fingerprint share a chip; different fingerprints get
+        //   different chips. So firing the same `notchify foo
+        //   -icon X -color Y` twice ends up in one chip, but a
+        //   warning (red exclamation) and a success (green check)
+        //   stay separate without forcing the user to add `-group`.
+        let icon = message.icon ?? ""
+        let color = message.color ?? ""
+        if icon.isEmpty && color.isEmpty {
+            return "a:_default"
         }
-        return "a:_default"
+        return "a:i=\(icon):c=\(color)"
     }
 
     private func ingest(_ notification: StoredNotification) {
@@ -331,6 +333,7 @@ final class NotchController {
                 // Chip-only entry: SwiftUI's slot transition fades it
                 // out when publishStacks reflects the removal.
                 removeNotification(n)
+                arrivals.removeAll { $0.id == n.id }
             }
         }
         publishStacks()
@@ -434,13 +437,21 @@ final class NotchController {
         if engaged {
             // Hovering takes precedence: retract any currently-
             // visible body so the user gets a clean chip-only view
-            // to inspect. The row stays in the chipstack regardless
-            // of persistence so focus-bearing notifications remain
-            // pollable for auto-dismiss, and so the user can
-            // still see the chip + open it via hover-list.
+            // to inspect. Skip the retract when there's nothing to
+            // reveal — a single chip with a single notification
+            // would just retract the body and immediately re-expand
+            // it as a hover-list row of identical content. The row
+            // stays in the chipstack regardless of persistence so
+            // focus-bearing notifications remain pollable for
+            // auto-dismiss.
             cancelAllDwells()
             if let top = model.liveStack.first {
-                beginRetraction(of: top, viaClick: false, keepInChipstack: true)
+                let chipCount = chipstacks.count
+                let notifCount = chipstacks[top.chipstackID]?.notifications.count ?? 0
+                let revealsMore = chipCount > 1 || notifCount > 1
+                if revealsMore {
+                    beginRetraction(of: top, viaClick: false, keepInChipstack: true)
+                }
             }
             return
         }
@@ -491,6 +502,12 @@ final class NotchController {
             model.forcedVisible = true
         }
         removeNotification(top)
+        // Drop any pending reveal of the same notification — without
+        // this, fast chip-clicks remove the chip but the queued
+        // arrival still shows up later as a body-only with no chip,
+        // because the cleanup-task drain happily pulls it from
+        // `arrivals`.
+        arrivals.removeAll { $0.id == top.id }
         publishStacks()
         if willEmptyEverything {
             scheduleEndOfPillRetract()
@@ -512,6 +529,7 @@ final class NotchController {
             model.forcedVisible = true
         }
         removeNotification(n)
+        arrivals.removeAll { $0.id == n.id }
         publishStacks()
         if willEmptyEverything {
             scheduleEndOfPillRetract()
@@ -576,9 +594,13 @@ final class NotchController {
         model.inRetraction = true
         cleanupTask?.cancel()
         cleanupTask = Task { @MainActor [weak self] in
-            // Wait for body fade-out + pillHeight retract to play
-            // before the next phase (slot retract / startNext).
-            try? await Task.sleep(for: .milliseconds(180))
+            // Wait for the body retract to fully play before
+            // mutating the chipstack — otherwise the slot fade
+            // overlaps the tail of the body fade and the user sees
+            // both happening at once. The body's combined
+            // opacity+offset transition runs ~280ms; we wait a hair
+            // past it so the slot retract starts on a clean frame.
+            try? await Task.sleep(for: .milliseconds(300))
             guard let self, !Task.isCancelled else { return }
 
             let willEmptyEverything = willRemoveFromChipStack

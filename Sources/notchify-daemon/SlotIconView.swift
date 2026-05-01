@@ -14,7 +14,13 @@ struct SlotIconView: View {
     var isLiveActive: Bool = false
 
     var body: some View {
-        let chevronVisible = isExpanded || isLiveActive
+        // Chevron shows only when there's something extra to reveal
+        // by expanding: more than one notification under this chip
+        // OR a livestack body whose chip needs disambiguating among
+        // multiple chips. A single chip with a single row would
+        // expand to identical content — no chevron needed.
+        let hasExtraRows = stack.notifications.count > 1
+        let chevronVisible = (isExpanded && hasExtraRows) || isLiveActive
         ZStack(alignment: .topTrailing) {
             // Icon centered in the slot; chevron is positioned via
             // offset so adding/removing it doesn't shift the icon
