@@ -365,6 +365,17 @@ struct NotchPillView: View {
         } else if !hovering && wasEngaged {
             onEngagementChange(false)
         }
+        // Cursor left the entire pill: clear the expanded chipstack
+        // immediately. While the cursor is still anywhere on the
+        // pill (pillHovered), `handleHover`'s "leave a slot" branch
+        // intentionally doesn't clear so the cursor can travel
+        // between a chip and its dropped-down list without the list
+        // briefly closing in the gap.
+        if !hovering {
+            hoverClearTask?.cancel()
+            hoverClearTask = nil
+            hoveredChipstackID = nil
+        }
     }
 
     private func handleInflightChange() {
@@ -383,23 +394,17 @@ struct NotchPillView: View {
         }
     }
 
-    /// Hover handling shared by the slot icon and the list area:
-    /// entering either keeps the same stack expanded; leaving either
-    /// schedules a brief debounced clear so the cursor can travel
-    /// between them without flicker.
+    /// Hover handling shared by the slot icon and the list area.
+    /// Entering either marks the stack expanded; leaving either is
+    /// a no-op while the cursor is still on the pill so the user
+    /// can travel between a chip and its list without the list
+    /// briefly closing in the gap. The expanded stack is cleared
+    /// when the cursor leaves the entire pill (`handlePillHover`).
     private func handleHover(_ stackID: String, _ hovering: Bool) {
+        guard hovering else { return }
         hoverClearTask?.cancel()
-        if hovering {
-            hoveredChipstackID = stackID
-        } else {
-            hoverClearTask = Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(120))
-                guard !Task.isCancelled else { return }
-                if hoveredChipstackID == stackID {
-                    hoveredChipstackID = nil
-                }
-            }
-        }
+        hoverClearTask = nil
+        hoveredChipstackID = stackID
     }
 
     /// Total horizontal room reserved for the shelf (excluding the
