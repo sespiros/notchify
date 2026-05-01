@@ -441,15 +441,14 @@ struct NotchPillView: View {
         size: CGFloat
     ) -> some View {
         let resolved = spec ?? "bell.fill"
-        if isFilePath(resolved),
-           let img = NSImage(contentsOfFile: expandTilde(resolved)) {
-            Image(nsImage: img)
-                .resizable()
-                .scaledToFit()
+        if isFilePath(resolved) {
+            // Use AnimatedImage so animated GIF / WebP icons play
+            // their frames; static images render as a single frame
+            // at the same code path.
+            AnimatedImage(path: expandTilde(resolved))
                 .frame(width: size, height: size)
         } else {
-            let symbol = isFilePath(resolved) ? "bell.fill" : resolved
-            Image(systemName: symbol)
+            Image(systemName: resolved)
                 .resizable()
                 .scaledToFit()
                 .foregroundStyle(color(named: colorName) ?? .white)

@@ -44,7 +44,7 @@ Sections (run one at a time):
   bodies      one-line, two-line wrap, ellipsis tail
   edge        race conditions: mid-slide, mid-retract, click-dismiss
   focus       -focus drop-if-focused and focus-on-return dismiss
-  image       custom file-path icon (needs ~/Pictures/claude-icon.png)
+  image       custom file-path icon (PNG + animated webp)
   all         run every section sequentially (mostly not unattended)
 EOF
 }
@@ -111,14 +111,16 @@ if run_section variants; then
     "$N" "Quick" "0.8s timeout" -timeout 0.8
     sleep 4
 
-    # Two ungrouped (no icon/color) sent in quick succession: the
-    # first is title-only (exercises the empty-body height path),
-    # the second arrives during the first's lifecycle so they
-    # coalesce into the a:_default chip and join the same livestack.
+    # Two ungrouped (no icon/color) sent in quick succession,
+    # both anonymous so they coalesce into the a:_default chip.
+    # Plain one is title-only (exercises the empty-body height
+    # path) and shows its body for its dwell; Plain two queues
+    # behind it, then swaps into the pill once Plain one retracts.
+    # The chip badge bumps to "2" while both rows are stacked.
     "$N" "Plain one"
     sleep 1
-    "$N" "Plain two" "shares default chip with above"
-    sleep 6
+    "$N" "Plain two" "queued behind Plain one in the default chip"
+    sleep 8
 
     # Same shape but the second arrival belongs to a different
     # group: it should queue behind the first's livestack, only
@@ -282,36 +284,42 @@ fi
 # --- Focus auto-dismiss ------------------------------------------
 
 if run_section focus; then
-    echo "[focus] -focus drops if source already focused; otherwise"
-    echo "        polls 1Hz and dismisses when source becomes focused."
+    echo "[focus] -focus polls 1Hz; auto-dismisses when source"
+    echo "        becomes focused. Click also runs the focus action."
 
-    # Sent FROM the current terminal: if Terminal/iTerm/etc is focused
-    # right now, the notification should be dropped immediately
-    # (look for "source already focused, dropping" in daemon log).
-    "$N" "Already focused" "should drop if you ran this from the terminal" \
-         -focus -icon eye.fill -color gray
-    sleep 4
-
-    echo "[focus] now switch away from the terminal within 3 seconds:"
+    echo "[focus] (1) auto-dismiss test: switch away within 3 seconds,"
+    echo "        then later switch back to this terminal/pane to see"
+    echo "        the chip dismiss itself."
     sleep 3
-    # The user is hopefully in another app now; this notification
-    # should appear as a chip and auto-dismiss when they Cmd-Tab back.
-    "$N" "Visit me" "switch back to the source terminal to dismiss me" \
+    "$N" "Visit me" "switch back to the source pane to dismiss me" \
          -focus -icon arrow.uturn.left.circle.fill -color blue
+    sleep 15
+
+    echo "[focus] (2) click-to-focus test: switch away within 3 seconds,"
+    echo "        then click the notification body / chip to bring the"
+    echo "        source window forward (and jump tmux to the source"
+    echo "        pane if you ran this from inside tmux)."
+    sleep 3
+    "$N" "Click to come back" "click me to focus the source" \
+         -focus -icon hand.tap.fill -color pink
     sleep 15
 fi
 
 # --- Image-file icon ---------------------------------------------
 
 if run_section image; then
-    echo "[image] custom file-path icon (skipped if path missing)"
-    if [ -f "$HOME/Pictures/claude-icon.png" ]; then
-        "$N" "Claude finished" "ready for review" \
-             -group claude-image -icon "$HOME/Pictures/claude-icon.png" -timeout 0
-        sleep 6
-    else
-        echo "        (place a PNG at ~/Pictures/claude-icon.png to enable)"
-    fi
+    echo "[image] custom file-path icon (PNG static + animated webp)"
+
+    "$N" "Static PNG icon" "uses Resources/AppIcon.png" \
+         -group image-png -icon "$SCRIPT_DIR/../Resources/AppIcon.png" -timeout 0
+    sleep 6
+
+    # Animated webp (rickroll). Tests whether the daemon decodes
+    # frames or just falls back to a still — useful as a quick
+    # check that animated chip icons render at all.
+    "$N" "Animated webp" "ai.webp from giphy" \
+         -group image-webp -icon "$SCRIPT_DIR/test-assets/ai.webp" -timeout 0
+    sleep 8
 fi
 
 echo "test done."
