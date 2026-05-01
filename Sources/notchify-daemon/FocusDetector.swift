@@ -118,7 +118,13 @@ enum FocusDetector {
         ghosttyFocusedTitleProvider: @MainActor () -> String? = ghosttyFocusedWindowTitle
     ) -> Bool {
         guard let bundle, key.bundle == bundle else { return false }
-        if bundle == "com.mitchellh.ghostty", let tty = key.tty {
+        // Window-level disambiguation only matters when tmux is in
+        // play (multiple Ghostty windows can each host a client of
+        // the same server, and a lenient pane match would otherwise
+        // dismiss from any of them). Outside tmux we have no reliable
+        // signal that a user-set window title contains the source
+        // tty, so requiring it would just suppress every dismissal.
+        if bundle == "com.mitchellh.ghostty", key.tmuxPane != nil, let tty = key.tty {
             guard let title = ghosttyFocusedTitleProvider() else { return false }
             guard title.contains(shortTTY(tty)) else { return false }
         }
