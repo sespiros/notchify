@@ -43,6 +43,15 @@ codesign --force --sign - --deep "$APP" >/dev/null
 echo "built $APP"
 
 if command -v hdiutil >/dev/null 2>&1; then
-    hdiutil create -volname Notchify -srcfolder "$APP" -ov -format UDZO "$DMG" >/dev/null
+    # Build the DMG from a staging dir that also includes an
+    # /Applications symlink, so users get the standard drag-to-
+    # install layout instead of a single .app icon.
+    STAGE="$ROOT/dist/dmg-staging"
+    rm -rf "$STAGE"
+    mkdir -p "$STAGE"
+    cp -R "$APP" "$STAGE/"
+    ln -s /Applications "$STAGE/Applications"
+    hdiutil create -volname Notchify -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
+    rm -rf "$STAGE"
     echo "built $DMG"
 fi
