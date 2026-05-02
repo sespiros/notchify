@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "notchify",
-    platforms: [.macOS(.v13)],
+    platforms: [.macOS(.v14)],
     products: [
         .executable(name: "notchify-daemon", targets: ["notchify-daemon"]),
         .executable(name: "notchify", targets: ["notchify"]),

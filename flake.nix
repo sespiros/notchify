@@ -12,7 +12,7 @@
     packages = forAll (pkgs: rec {
       default = notchify;
 
-      # Notchify uses macOS 13+ APIs (SMAppService) that aren't reliably
+      # Notchify uses macOS 14+ APIs (SMAppService, @Observable) that aren't reliably
       # available via nixpkgs' standalone Swift SDK, so the build relies
       # on the host Xcode.app toolchain. Build with `nix build --impure`.
       notchify = pkgs.stdenvNoCC.mkDerivation {

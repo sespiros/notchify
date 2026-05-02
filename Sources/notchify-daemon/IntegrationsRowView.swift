@@ -166,7 +166,11 @@ final class IntegrationsRowView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         let item = enclosingMenuItem ?? menuItem
         if item?.isHighlighted == true {
-            NSColor.selectedMenuItemColor.setFill()
+            // selectedMenuItemColor was deprecated in macOS 11 in
+            // favour of NSVisualEffectView with .selection material;
+            // selectedContentBackgroundColor matches the menu accent
+            // closely without restructuring the cell hierarchy.
+            NSColor.selectedContentBackgroundColor.setFill()
             bounds.fill()
             titleLabel.textColor = .selectedMenuItemTextColor
             chevronView.contentTintColor = .selectedMenuItemTextColor

@@ -38,12 +38,19 @@ struct VerticalListScroll<Content: View>: NSViewRepresentable {
             forName: NSView.boundsDidChangeNotification,
             object: scroll.contentView,
             queue: .main
-        ) { [coord = context.coordinator] _ in coord.publishScrollState() }
+        ) { [coord = context.coordinator] _ in
+            // queue: .main keeps us on the main thread; Swift's
+            // concurrency checker can't see that, so assert it for
+            // the @MainActor-isolated method.
+            MainActor.assumeIsolated { coord.publishScrollState() }
+        }
         context.coordinator.frameObserver = center.addObserver(
             forName: NSView.frameDidChangeNotification,
             object: host,
             queue: .main
-        ) { [coord = context.coordinator] _ in coord.publishScrollState() }
+        ) { [coord = context.coordinator] _ in
+            MainActor.assumeIsolated { coord.publishScrollState() }
+        }
 
         context.coordinator.scrollView = scroll
         DispatchQueue.main.async { context.coordinator.publishScrollState() }

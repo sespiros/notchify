@@ -28,7 +28,7 @@ struct SizeReport: Equatable {
 
 @MainActor
 struct NotchPillView: View {
-    @ObservedObject var model: NotchModel
+    let model: NotchModel
     var onClick: (StoredNotification) -> Void
     var onRowClick: (StoredNotification) -> Void
     var onChipClick: (String) -> Void
@@ -229,13 +229,13 @@ struct NotchPillView: View {
         // .background(GeometryReader { ... }) measurement which kept
         // returning .zero. We feed `pillVisible`, pillWidth and
         // pillHeight into a tuple so .onChange fires on any of them.
-        .onChange(of: SizeReport(visible: pillVisible, width: pillWidth, height: pillHeight)) { rep in
+        .onChange(of: SizeReport(visible: pillVisible, width: pillWidth, height: pillHeight)) { _, rep in
             onPillSizeChange(rep.visible ? CGSize(width: rep.width, height: rep.height) : .zero)
         }
         .onAppear {
             onPillSizeChange(pillVisible ? CGSize(width: pillWidth, height: pillHeight) : .zero)
         }
-        .onChange(of: model.chipstacks.map(\.id)) { newIDs in
+        .onChange(of: model.chipstacks.map(\.id)) { _, newIDs in
             if let id = hoveredChipstackID, !newIDs.contains(id) {
                 hoveredChipstackID = nil
             }
@@ -246,14 +246,14 @@ struct NotchPillView: View {
                 lastArrivalScrollID = newest
             }
         }
-        .onChange(of: pillVisible) { newVisible in
+        .onChange(of: pillVisible) { _, newVisible in
             if !newVisible {
                 hoveredChipstackID = nil
                 pillHovered = false
                 model.isUserEngaged = false
             }
         }
-        .onChange(of: model.liveStack.first?.id) { _ in handleInflightChange(pillWidth: pillWidth, notchSize: notchSize) }
+        .onChange(of: model.liveStack.first?.id) { handleInflightChange(pillWidth: pillWidth, notchSize: notchSize) }
     }
 
     /// Render the topmost livestack row in the pill drop area.

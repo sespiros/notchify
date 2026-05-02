@@ -121,7 +121,7 @@ A flake is provided. Add the input and import the module:
 }
 ```
 
-The build uses host Xcode.app for the macOS 13+ Swift toolchain, so
+The build uses host Xcode.app for the macOS 14+ Swift toolchain, so
 `darwin-rebuild` needs `--impure`:
 
 ```sh

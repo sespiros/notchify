@@ -54,14 +54,17 @@ struct HorizontalChipScroll<Content: View>: NSViewRepresentable {
             object: scroll.contentView,
             queue: .main
         ) { [coord = context.coordinator] _ in
-            coord.publishScrollState()
+            // queue: .main guarantees we're on the main thread, but
+            // Swift's concurrency checker can't see that, so we have
+            // to assert it for the @MainActor-isolated method.
+            MainActor.assumeIsolated { coord.publishScrollState() }
         }
         context.coordinator.frameObserver = center.addObserver(
             forName: NSView.frameDidChangeNotification,
             object: host,
             queue: .main
         ) { [coord = context.coordinator] _ in
-            coord.publishScrollState()
+            MainActor.assumeIsolated { coord.publishScrollState() }
         }
 
         context.coordinator.scrollView = scroll

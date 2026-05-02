@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- macOS 13+ (Sonoma 14+ recommended).
+- macOS 14+ (Sonoma).
 - Xcode 15+ (Command Line Tools alone are not enough — the project
   needs the full Xcode `MacOSX.sdk` and Swift 5.9+ toolchain that ship
   with Xcode.app).

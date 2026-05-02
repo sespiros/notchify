@@ -8,12 +8,12 @@ obvious from reading the code.
 A menubar daemon (`notchify-daemon`, SwiftUI) that animates an overlay
 out of the MacBook camera notch on the built-in display, plus a CLI
 (`notchify`) that posts a one-line JSON payload over
-`/tmp/notchify.sock`. macOS 13+. The daemon never touches
+`/tmp/notchify.sock`. macOS 14+. The daemon never touches
 `UNUserNotificationCenter`, so nothing piles up in Notification Center.
 
 ## Build prerequisites
 
-- macOS 13+ and full Xcode 15+. Command Line Tools alone aren't
+- macOS 14+ and full Xcode 15+. Command Line Tools alone aren't
   enough; the project needs Xcode's `MacOSX.sdk` and the Swift 5.9+
   toolchain that ships with `Xcode.app`.
 - Plain `swift build` works as long as `xcode-select -p` points at a
