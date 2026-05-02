@@ -43,7 +43,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Notchify-dmg
-          path: dist/Notchify.dmg
+          path: dist/Notchify-*.dmg
           if-no-files-found: error
 
       - name: Publish GitHub release
@@ -54,4 +54,4 @@ jobs:
           name: ${{ steps.tag.outputs.name }}
           draft: true
           generate_release_notes: true
-          files: dist/Notchify.dmg
+          files: dist/Notchify-*.dmg
