@@ -17,7 +17,7 @@
       # on the host Xcode.app toolchain. Build with `nix build --impure`.
       notchify = pkgs.stdenvNoCC.mkDerivation {
         pname = "notchify";
-        version = "0.3.2";
+        version = "0.4.0";
         src = ./.;
 
         # Allow access to /Applications/Xcode.app and /usr/bin/codesign
