@@ -21,6 +21,21 @@ case "$state" in
     *) exit 0 ;;
 esac
 
+# Debounce: skip if we already fired for this state in the last
+# DEBOUNCE_SECS seconds. Symmetric with the claude recipe — same
+# tool-phase Stop spam can occur on codex.
+DEBOUNCE_SECS=5
+stamp_dir="${TMPDIR:-/tmp}"
+stamp="$stamp_dir/notchify-codex-${state}.stamp"
+now=$(date +%s)
+if [ -f "$stamp" ]; then
+    last=$(cat "$stamp" 2>/dev/null || echo 0)
+    if [ $((now - last)) -lt "$DEBOUNCE_SECS" ]; then
+        exit 0
+    fi
+fi
+echo "$now" > "$stamp"
+
 loc=$(tmux display-message -pt "$TMUX_PANE" '#{session_name}:#{window_name}' 2>/dev/null || echo "")
 title="codex ${loc:-session}"
 

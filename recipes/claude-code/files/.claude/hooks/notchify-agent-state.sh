@@ -22,6 +22,22 @@ case "$state" in
     *) exit 0 ;;
 esac
 
+# Debounce: Claude Code's Stop hook fires multiple times per turn
+# when the assistant alternates between text and tool calls, which
+# otherwise spams a "done" popup per phase. Skip the notify if we
+# already fired for this state within DEBOUNCE_SECS.
+DEBOUNCE_SECS=5
+stamp_dir="${TMPDIR:-/tmp}"
+stamp="$stamp_dir/notchify-claude-${state}.stamp"
+now=$(date +%s)
+if [ -f "$stamp" ]; then
+    last=$(cat "$stamp" 2>/dev/null || echo 0)
+    if [ $((now - last)) -lt "$DEBOUNCE_SECS" ]; then
+        exit 0
+    fi
+fi
+echo "$now" > "$stamp"
+
 payload=$(cat 2>/dev/null || true)
 
 # extract_session_title <transcript_path>
