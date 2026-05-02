@@ -71,8 +71,8 @@ out of the MacBook camera notch on the built-in display, plus a CLI
 
 ## README & docs
 
-- Keep the README minimal. The full Claude Code + tmux hook lives in
-  `examples/claude-code-tmux/`, not inline in the README.
+- Keep the README minimal. Agent-integration details live in
+  `recipes/README.md`; the main README only points there.
 - Forgejo and GitHub render animated GIFs in READMEs but not
   `<video autoplay>` MP4. Keep `Resources/demo.gif` under ~1 MB.
 - `BUILDING.md` is for contributors; release/notarization steps don't

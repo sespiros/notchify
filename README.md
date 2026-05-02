@@ -131,45 +131,27 @@ darwin-rebuild switch --flake . --impure
 This installs both the `notchify` CLI on PATH and `Notchify.app` to
 `/Applications`.
 
-## Example agent integration
+## Agent integrations
 
-Coding agents like Claude Code, Codex CLI, opencode, and others expose
-event hooks. Wiring a hook to `notchify` gives you a quick visual cue
-when the agent finishes a turn or asks for permission, without
-anything ending up in Notification Center.
+Coding agents like Claude Code and Codex CLI expose event hooks.
+Notchify ships ready-made integrations that wire those hooks to the
+notch in one click. From the menubar icon, open **Integrations** and
+pick the agent you want.
 
-The pattern is the same for any agent:
-
-1. Install a small hook script that calls `notchify` with the right
-   sound + symbol for that lifecycle event.
-2. Register the script in the agent's hook config.
-
-Example hook script (`~/.config/<agent>/hooks/notchify-state.sh`):
+CLI equivalent:
 
 ```sh
-#!/bin/sh
-state="${1:-}"
-text="Agent in $(basename "$PWD")"
-
-case "$state" in
-  done)
-    notchify "Agent done"        "$text" \
-             -sound ready -icon checkmark.circle.fill -color green
-    ;;
-  blocked)
-    notchify "Agent needs input" "$text" \
-             -sound warning -icon exclamationmark.triangle.fill -color orange
-    ;;
-esac
+notchify-recipes list
+notchify-recipes install claude-code
+notchify-recipes install codex
 ```
 
-Register `done` / `blocked` against the agent's equivalent of "Stop" /
-"PermissionRequest" hooks (different agents call them different things;
-see your agent's hook documentation).
+The menu also surfaces drift (a red dot) when an external tool such as
+chezmoi has dropped the hook registrations from the agent's config —
+click to re-sync.
 
-A more complete real-world hook (per-tab tmux state, focus-aware,
-extracts `/rename` session name) lives in
-[`examples/claude-code-tmux/`](./examples/claude-code-tmux/).
+Full reference, including how to author a new integration, lives in
+[`recipes/README.md`](./recipes/README.md).
 
 ## Inspiration
 
