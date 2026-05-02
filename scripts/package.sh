@@ -20,9 +20,16 @@ swift build -c release
 rm -rf "$APP" "$DMG"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
-cp .build/release/notchify-daemon "$APP/Contents/MacOS/notchify-daemon"
-cp .build/release/notchify        "$APP/Contents/MacOS/notchify"
-cp Resources/Info.plist           "$APP/Contents/Info.plist"
+cp .build/release/notchify-daemon  "$APP/Contents/MacOS/notchify-daemon"
+cp .build/release/notchify         "$APP/Contents/MacOS/notchify"
+cp .build/release/notchify-recipes "$APP/Contents/MacOS/notchify-recipes"
+cp Resources/Info.plist            "$APP/Contents/Info.plist"
+
+# Ship recipes as bundle data. notchify-recipes resolves
+# ../share/notchify/recipes relative to its binary, so place them
+# under Contents/share/notchify/recipes inside the .app.
+mkdir -p "$APP/Contents/share/notchify"
+cp -R recipes "$APP/Contents/share/notchify/recipes"
 
 if [ -f Resources/AppIcon.icns ]; then
     cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"

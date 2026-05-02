@@ -6,3 +6,6 @@ DerivedData/
 dist/
 Resources/AppIcon.iconset/
 .claude/
+
+# Allow recipe-shipped .claude/ hook templates
+!recipes/**/files/.claude/

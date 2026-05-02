@@ -7,6 +7,7 @@ let package = Package(
     products: [
         .executable(name: "notchify-daemon", targets: ["notchify-daemon"]),
         .executable(name: "notchify", targets: ["notchify"]),
+        .executable(name: "notchify-recipes", targets: ["notchify-recipes"]),
     ],
     targets: [
         .executableTarget(
@@ -16,6 +17,10 @@ let package = Package(
         .executableTarget(
             name: "notchify",
             path: "Sources/notchify"
+        ),
+        .executableTarget(
+            name: "notchify-recipes",
+            path: "Sources/notchify-recipes"
         ),
     ]
 )

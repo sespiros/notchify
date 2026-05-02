@@ -47,12 +47,22 @@
           runHook preInstall
 
           mkdir -p $out/bin
+          mkdir -p $out/share/notchify
           mkdir -p $out/Applications/Notchify.app/Contents/{MacOS,Resources}
 
-          cp $TMPDIR/build/release/notchify        $out/bin/notchify
-          cp $TMPDIR/build/release/notchify-daemon $out/Applications/Notchify.app/Contents/MacOS/notchify-daemon
-          cp $TMPDIR/build/release/notchify        $out/Applications/Notchify.app/Contents/MacOS/notchify
-          cp Resources/Info.plist                  $out/Applications/Notchify.app/Contents/Info.plist
+          cp $TMPDIR/build/release/notchify         $out/bin/notchify
+          cp $TMPDIR/build/release/notchify-recipes $out/bin/notchify-recipes
+          cp $TMPDIR/build/release/notchify-daemon  $out/Applications/Notchify.app/Contents/MacOS/notchify-daemon
+          cp $TMPDIR/build/release/notchify         $out/Applications/Notchify.app/Contents/MacOS/notchify
+          cp $TMPDIR/build/release/notchify-recipes $out/Applications/Notchify.app/Contents/MacOS/notchify-recipes
+          cp Resources/Info.plist                   $out/Applications/Notchify.app/Contents/Info.plist
+          # Recipe data: notchify-recipes looks under
+          # ../share/notchify/recipes relative to its own binary, which
+          # resolves to $out/share/notchify/recipes for the bin/ copy
+          # and Contents/share/... for the .app copy.
+          cp -R recipes $out/share/notchify/recipes
+          mkdir -p $out/Applications/Notchify.app/Contents/share/notchify
+          cp -R recipes $out/Applications/Notchify.app/Contents/share/notchify/recipes
           if [ -f Resources/AppIcon.icns ]; then
             cp Resources/AppIcon.icns $out/Applications/Notchify.app/Contents/Resources/AppIcon.icns
           fi
