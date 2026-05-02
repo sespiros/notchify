@@ -71,12 +71,17 @@ final class AnimatedImageNSView: NSView {
 
     private func scheduleNext() {
         let delay = delays[frameIndex % max(delays.count, 1)]
-        timer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+        // Add to .common modes so frame stepping doesn't pause while
+        // the runloop is in .eventTracking (any time the user is
+        // scrolling, clicking, or dragging anywhere on screen).
+        let t = Timer(timeInterval: delay, repeats: false) { [weak self] _ in
             guard let self else { return }
             self.frameIndex = (self.frameIndex + 1) % self.frames.count
             self.layer?.contents = self.frames[self.frameIndex]
             self.scheduleNext()
         }
+        RunLoop.main.add(t, forMode: .common)
+        timer = t
     }
 
     /// Per-frame delay extracted from the image's container-specific
