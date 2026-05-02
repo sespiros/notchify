@@ -12,11 +12,13 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "notchify-daemon",
-            path: "Sources/notchify-daemon"
+            path: "Sources/notchify-daemon",
+            exclude: ["Focus/README.md"]
         ),
         .executableTarget(
             name: "notchify",
-            path: "Sources/notchify"
+            path: "Sources/notchify",
+            exclude: ["Focus/README.md"]
         ),
         .executableTarget(
             name: "notchify-recipes",

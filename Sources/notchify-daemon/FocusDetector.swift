@@ -25,8 +25,13 @@ enum FocusDetector {
     static func matches(
         _ key: DismissKey,
         snapshot: FocusSnapshot,
-        providers: [FocusDetectorProvider] = registeredFocusDetectors
+        providers: [FocusDetectorProvider]? = nil
     ) -> Bool {
+        // Fall back to the registered detectors here rather than as a
+        // default argument: a `@MainActor` global referenced from a
+        // default-argument expression evaluates in the caller's
+        // isolation context, which Swift 6 flags as cross-isolation.
+        let providers = providers ?? registeredFocusDetectors
         var anyVoted = false
         for provider in providers {
             guard let vote = provider.matches(key: key, snapshot: snapshot) else { continue }
