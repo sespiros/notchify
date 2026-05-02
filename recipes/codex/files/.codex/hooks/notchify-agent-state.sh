@@ -48,13 +48,17 @@ fi
 # detail; only grouping is global.
 case "$state" in
     blocked)
+        # Synchronous (no &): backgrounding reparents notchify to
+        # launchd when the hook exits, breaking the CLI's bundle
+        # detection (getppid()=1) and so the -focus click-action
+        # and dismiss-key. notchify is sub-second; we wait.
         notchify "$title" "waiting for input" -sound info \
                  -icon "$HOME/.config/codex/icons/blocked.png" \
-                 -group "codex:blocked" -focus &
+                 -group "codex:blocked" -focus
         ;;
     idle)
         notchify "$title" "done" -sound ready \
                  -icon "$HOME/.config/codex/icons/done.png" \
-                 -group "codex:done" -focus &
+                 -group "codex:done" -focus
         ;;
 esac

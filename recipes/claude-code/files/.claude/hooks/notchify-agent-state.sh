@@ -127,13 +127,18 @@ case "$state" in
         message=$(printf %s "$payload" | sed -n 's/.*"message":"\([^"]*\)".*/\1/p')
         [ -z "$message" ] && message=$(extract_blocked_hint "$transcript")
         body="${message:-waiting for input}"
+        # Run synchronously: backgrounding (with &) reparents notchify
+        # to launchd as soon as the hook script exits, which makes
+        # getppid()-based ancestor walking fail to find the calling
+        # terminal app, breaking -focus's click-action and dismiss-key
+        # detection. notchify is sub-second; the hook can wait.
         notchify "$title" "$body" -sound info \
                  -icon "$HOME/.config/claude/icons/blocked.png" \
-                 -group "claude:blocked" -focus &
+                 -group "claude:blocked" -focus
         ;;
     idle)
         notchify "$title" "done" -sound ready \
                  -icon "$HOME/.config/claude/icons/done.png" \
-                 -group "claude:done" -focus &
+                 -group "claude:done" -focus
         ;;
 esac
