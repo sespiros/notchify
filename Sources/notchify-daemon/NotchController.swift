@@ -165,6 +165,13 @@ final class NotchController {
     }
 
     func present(_ message: Message) {
+        // If the user is already looking at the source terminal/pane,
+        // don't flash a `-focus` notification only to retract it on
+        // the next 1 Hz focus poll. Suppress it at ingress instead.
+        if shouldSuppressForCurrentFocus(message) {
+            return
+        }
+
         if Focus.doNotDisturbActive() {
             // Don't play the in-flight or sound while DND is active,
             // but still ingest into the stack so the user can see
@@ -324,6 +331,11 @@ final class NotchController {
             model.forcedVisible = false
         }
         updateFocusTimer()
+    }
+
+    private func shouldSuppressForCurrentFocus(_ message: Message) -> Bool {
+        guard let key = message.dismissKey else { return false }
+        return FocusDetector.matches(key, snapshot: .capture())
     }
 
     /// Start/stop the focus poll based on whether any notification in
