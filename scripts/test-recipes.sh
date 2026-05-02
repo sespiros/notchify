@@ -111,6 +111,24 @@ out=$(NOTCHIFY_PREFIX="$TMP" "$BIN" status 2>&1) && fail "status did not return 
 echo "$out" | grep -q "registrations missing" || fail "status missing drift message: $out"
 pass "drift detected after external rewrite"
 
+echo "==> hook scripts stay non-fatal if notchify itself fails"
+mkdir -p "$TMP/bin"
+cat > "$TMP/bin/notchify" <<'SH'
+#!/bin/sh
+exit 1
+SH
+chmod 755 "$TMP/bin/notchify"
+
+"$BIN" install codex --prefix "$TMP" >/dev/null
+HOME="$TMP" PATH="$TMP/bin:$PATH" sh "$TMP/.codex/hooks/notchify-agent-state.sh" idle ||
+  fail "codex hook propagated notchify failure"
+
+"$BIN" install claude-code --prefix "$TMP" >/dev/null
+HOME="$TMP" PATH="$TMP/bin:$PATH" sh "$TMP/.claude/hooks/notchify-agent-state.sh" idle ||
+  fail "claude hook propagated notchify failure"
+
+pass "hook scripts do not fail the agent when notchify is unavailable"
+
 if command -v shellcheck >/dev/null 2>&1; then
     echo "==> shellcheck"
     shellcheck recipes/lib/install-common.sh \

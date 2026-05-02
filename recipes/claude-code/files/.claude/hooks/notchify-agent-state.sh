@@ -132,13 +132,17 @@ case "$state" in
         # getppid()-based ancestor walking fail to find the calling
         # terminal app, breaking -focus's click-action and dismiss-key
         # detection. notchify is sub-second; the hook can wait.
-        notchify "$title" "$body" -sound info \
-                 -icon "$HOME/.config/claude/icons/blocked.png" \
-                 -group "claude:blocked" -focus
+        if ! notchify "$title" "$body" -sound info \
+                      -icon "$HOME/.config/claude/icons/blocked.png" \
+                      -group "claude:blocked" -focus; then
+            exit 0
+        fi
         ;;
     idle)
-        notchify "$title" "done" -sound ready \
-                 -icon "$HOME/.config/claude/icons/done.png" \
-                 -group "claude:done" -focus
+        if ! notchify "$title" "done" -sound ready \
+                      -icon "$HOME/.config/claude/icons/done.png" \
+                      -group "claude:done" -focus; then
+            exit 0
+        fi
         ;;
 esac
