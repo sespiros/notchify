@@ -11,12 +11,12 @@ struct RowView: View {
         Button(action: onClick) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(notification.message.title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(Design.Font.rowTitle)
                     .foregroundStyle(.white)
                     .lineLimit(1)
                 if let body = notification.message.text, !body.isEmpty {
                     Text(body)
-                        .font(.system(size: 11))
+                        .font(Design.Font.rowBody)
                         .foregroundStyle(.white.opacity(0.7))
                         .lineLimit(2)
                         .truncationMode(.tail)

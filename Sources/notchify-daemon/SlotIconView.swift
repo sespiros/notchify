@@ -44,15 +44,16 @@ struct SlotIconView: View {
             .frame(width: NotchPillView.slotWidth, height: notchHeight)
 
             Image(systemName: "chevron.down")
-                .font(.system(size: 7, weight: .bold))
+                .font(Design.Font.slotChevron)
                 .foregroundStyle(.white.opacity(0.7))
                 .opacity(chevronVisible ? 1 : 0)
+                .accessibilityHidden(true)
                 .frame(width: NotchPillView.slotWidth, height: notchHeight, alignment: .bottom)
                 .padding(.bottom, 2)
 
             if stack.notifications.count > 1 {
                 Text("\(stack.notifications.count)")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(Design.Font.slotBadge)
                     .foregroundStyle(.white)
                     .offset(x: -3, y: 4)
             }

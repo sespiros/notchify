@@ -88,6 +88,13 @@ struct NotchPillView: View {
     /// to scroll. Past that, content scrolls inside.
     static let maxListHeight: CGFloat = 3.5 * rowHeight
 
+    /// Honour the system Reduce Motion setting: when enabled, the
+    /// pill fades in/out at its target geometry instead of sliding
+    /// down from above the screen edge and morphing height/width as
+    /// chips arrive. Animation curves elsewhere collapse to nil so
+    /// implicit transitions become instantaneous.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var hoveredChipstackID: String? = nil
     @State private var textVisible: Bool = false
     /// True while the cursor is anywhere over the pill (used to
@@ -155,9 +162,12 @@ struct NotchPillView: View {
         let dropHeight = max(inflightDropHeight, hoverDropHeight)
         let pillHeight = notchSize.height + dropHeight
         let pillVisible = !stacks.isEmpty || isInflight || model.forcedVisible
-        let slideOffset: CGFloat = pillVisible
+        // With Reduce Motion the pill stays at its target position and
+        // fades in/out instead of sliding from above the screen edge.
+        let slideOffset: CGFloat = (pillVisible || reduceMotion)
             ? 0
             : -(notchSize.height + Self.extraHeight + 4)
+        let pillOpacity: Double = reduceMotion ? (pillVisible ? 1 : 0) : 1
 
         ZStack(alignment: .topTrailing) {
             UnevenRoundedRectangle(
@@ -216,12 +226,13 @@ struct NotchPillView: View {
         .frame(width: pillWidth, height: pillHeight)
         .clipped()
         .offset(y: slideOffset)
-        .animation(.easeOut(duration: 0.22), value: pillVisible)
-        .animation(.easeOut(duration: 0.2), value: stacks.count)
-        .animation(.easeOut(duration: 0.15), value: pillHeight)
-        .animation(.easeOut(duration: 0.18), value: hoveredChipstackID)
-        .animation(.easeOut(duration: 0.2), value: liveStack.first?.chipstackID)
-        .animation(.easeInOut(duration: 0.28), value: liveStack.first?.id)
+        .opacity(pillOpacity)
+        .animation(reduceMotion ? .easeOut(duration: 0.18) : .easeOut(duration: 0.22), value: pillVisible)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: stacks.count)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: pillHeight)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: hoveredChipstackID)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: liveStack.first?.chipstackID)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.28), value: liveStack.first?.id)
         .onHover { hovering in handlePillHover(hovering) }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
         // Compute pill size directly from model state and publish it
@@ -329,19 +340,22 @@ struct NotchPillView: View {
                 ForEach(chipstacks) { stack in
                     let isExpandedStack = (stack.id == effectiveHoveredID)
                     let isLiveActive = (stack.id == liveActiveID)
-                    SlotIconView(
-                        stack: stack,
-                        notchHeight: notchSize.height,
-                        isExpanded: isExpandedStack,
-                        isLiveActive: isLiveActive,
-                        totalChipCount: chipstacks.count
-                    )
-                        .frame(width: Self.slotWidth, height: notchSize.height)
-                        .contentShape(Rectangle())
-                        .accessibilityAddTraits(.isButton)
-                        .accessibilityLabel("Show \(stack.id) notifications")
-                        .onTapGesture { onChipClick(stack.id) }
-                        .onHover { hovering in handleHover(stack.id, hovering) }
+                    Button {
+                        onChipClick(stack.id)
+                    } label: {
+                        SlotIconView(
+                            stack: stack,
+                            notchHeight: notchSize.height,
+                            isExpanded: isExpandedStack,
+                            isLiveActive: isLiveActive,
+                            totalChipCount: chipstacks.count
+                        )
+                            .frame(width: Self.slotWidth, height: notchSize.height)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(NoFeedbackButtonStyle())
+                    .accessibilityLabel("Show \(stack.id) notifications")
+                    .onHover { hovering in handleHover(stack.id, hovering) }
                         .transition(
                             .asymmetric(
                                 insertion: .opacity.animation(.easeIn(duration: 0.12)),

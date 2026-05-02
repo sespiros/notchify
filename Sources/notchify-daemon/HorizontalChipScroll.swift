@@ -68,7 +68,7 @@ struct HorizontalChipScroll<Content: View>: NSViewRepresentable {
         }
 
         context.coordinator.scrollView = scroll
-        DispatchQueue.main.async { context.coordinator.publishScrollState() }
+        Task { @MainActor [coord = context.coordinator] in coord.publishScrollState() }
         return scroll
     }
 
@@ -88,7 +88,7 @@ struct HorizontalChipScroll<Content: View>: NSViewRepresentable {
         if let requested = scrollTargetX,
            context.coordinator.lastAppliedTargetX != requested {
             context.coordinator.lastAppliedTargetX = requested
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 guard let doc = nsView.documentView else { return }
                 let visible = nsView.contentView.bounds.width
                 let maxX = max(0, doc.frame.width - visible)
@@ -101,7 +101,7 @@ struct HorizontalChipScroll<Content: View>: NSViewRepresentable {
                 }
             }
         }
-        DispatchQueue.main.async { context.coordinator.publishScrollState() }
+        Task { @MainActor [coord = context.coordinator] in coord.publishScrollState() }
     }
 
     private func sizeHostToFit(host: NSView, viewportHeight: CGFloat) {

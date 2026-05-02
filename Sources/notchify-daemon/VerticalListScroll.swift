@@ -53,7 +53,7 @@ struct VerticalListScroll<Content: View>: NSViewRepresentable {
         }
 
         context.coordinator.scrollView = scroll
-        DispatchQueue.main.async { context.coordinator.publishScrollState() }
+        Task { @MainActor [coord = context.coordinator] in coord.publishScrollState() }
         return scroll
     }
 
@@ -68,7 +68,7 @@ struct VerticalListScroll<Content: View>: NSViewRepresentable {
             host.rootView = content()
             sizeHostToFit(host: host, viewportWidth: viewportWidth)
         }
-        DispatchQueue.main.async { context.coordinator.publishScrollState() }
+        Task { @MainActor [coord = context.coordinator] in coord.publishScrollState() }
     }
 
     private func sizeHostToFit(host: NSView, viewportWidth: CGFloat) {
