@@ -172,18 +172,11 @@ final class NotchController {
             return
         }
 
+        // Do Not Disturb means do not disturb. Drop the message
+        // entirely (no chip, no body, no sound) rather than ingesting
+        // it as a silent persistent row, so the pill stays invisible
+        // while DND is active.
         if Focus.doNotDisturbActive() {
-            // Don't play the in-flight or sound while DND is active,
-            // but still ingest into the stack so the user can see
-            // what they missed once they take their headphones off.
-            // Equivalent to "engagement-piled" arrivals: persistent
-            // row, no animation, no sound. They'll resume normal
-            // lifecycle if DND clears (left to a future tweak).
-            let chipstackID = chipstackIDFor(message)
-            let notification = StoredNotification(message: message, chipstackID: chipstackID)
-            ingest(notification)
-            ensurePanelOnScreen()
-            publishStacks()
             return
         }
 
