@@ -58,6 +58,13 @@ final class NotchController {
     /// dismissKey-bearing rows in the stacks.
     private var focusTimer: Timer?
 
+    /// Pill rect in screen coordinates, used by the global mouse
+    /// monitor to decide whether the panel should currently swallow
+    /// or pass through mouse events. Updated on pill-size publishes
+    /// and on panel-frame changes.
+    private var pillScreenRect: NSRect = .zero
+    private var mouseMonitor: Any?
+
     init() {
         // Pre-allocate enough horizontal room for the notch plus a row
         // of slots, and enough vertical room for the in-flight drop +
@@ -107,8 +114,54 @@ final class NotchController {
             onRowClick: { [weak self] n in self?.handleRowClick(n) },
             onChipClick: { [weak self] chipstackID in self?.handleChipClick(chipstackID) },
             onInflightHover: { [weak self] hovering in self?.handleInflightHover(hovering) },
-            onEngagementChange: { [weak self] engaged in self?.handleEngagementChange(engaged) }
+            onEngagementChange: { [weak self] engaged in self?.handleEngagementChange(engaged) },
+            onPillSizeChange: { [weak self] size in self?.updateVisibleContentRect(pillSize: size) }
         )
+
+        // NSPanel at .statusBar level swallows clicks across its
+        // entire frame regardless of NSHostingView.hitTest, so we
+        // toggle window-level ignoresMouseEvents based on cursor
+        // position. When the cursor is over the visible pill rect
+        // the window receives clicks; everywhere else, clicks pass
+        // straight through to the app underneath.
+        panel.ignoresMouseEvents = true
+        mouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved]) { [weak self] _ in
+            Task { @MainActor in self?.updateIgnoresMouseEvents() }
+        }
+        NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved]) { [weak self] event in
+            Task { @MainActor in self?.updateIgnoresMouseEvents() }
+            return event
+        }
+    }
+
+    private func updateIgnoresMouseEvents() {
+        let cursor = NSEvent.mouseLocation
+        let over = pillScreenRect.width > 0 && pillScreenRect.contains(cursor)
+        if panel.ignoresMouseEvents != !over {
+            panel.ignoresMouseEvents = !over
+        }
+    }
+
+    /// Translate the SwiftUI-published pill size into a screen-coords
+    /// rect used by the global mouse monitor to flip the panel's
+    /// ignoresMouseEvents on/off based on cursor position. The pill
+    /// is anchored topTrailing in the panel, and the panel's screen
+    /// frame uses bottom-left origin, so the pill's right edge =
+    /// panel.maxX and its top edge = panel.maxY.
+    private func updateVisibleContentRect(pillSize: CGSize) {
+        if pillSize.width <= 0 || pillSize.height <= 0 {
+            pillScreenRect = .zero
+            updateIgnoresMouseEvents()
+            return
+        }
+        let pf = panel.frame
+        pillScreenRect = NSRect(
+            x: pf.maxX - pillSize.width,
+            y: pf.maxY - pillSize.height,
+            width: pillSize.width,
+            height: pillSize.height
+        )
+        updateIgnoresMouseEvents()
     }
 
     func present(_ message: Message) {

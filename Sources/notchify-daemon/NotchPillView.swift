@@ -17,6 +17,15 @@ import SwiftUI
 /// retraction *stops* at chip-row height as long as any slots remain;
 /// only when the last slot is gone does the pill slide back up
 /// off-screen.
+/// Equatable bundle of the values that go into the pill's visible
+/// size, used to drive .onChange so we publish whenever any of
+/// them shifts. Avoids SwiftUI's flaky GeometryReader measurement.
+struct SizeReport: Equatable {
+    let visible: Bool
+    let width: CGFloat
+    let height: CGFloat
+}
+
 @MainActor
 struct NotchPillView: View {
     @ObservedObject var model: NotchModel
@@ -25,6 +34,29 @@ struct NotchPillView: View {
     var onChipClick: (String) -> Void
     var onInflightHover: (Bool) -> Void = { _ in }
     var onEngagementChange: (Bool) -> Void = { _ in }
+    /// Reports the rendered pill's size whenever it changes. The
+    /// controller combines this with the host view's known bounds
+    /// to compute a click-through rect (the pill is anchored
+    /// topTrailing, so origin is derivable from size + host bounds).
+    /// .zero means "no visible content; let everything click through."
+    var onPillSizeChange: (CGSize) -> Void = { _ in }
+    init(
+        model: NotchModel,
+        onClick: @escaping (StoredNotification) -> Void,
+        onRowClick: @escaping (StoredNotification) -> Void,
+        onChipClick: @escaping (String) -> Void,
+        onInflightHover: @escaping (Bool) -> Void = { _ in },
+        onEngagementChange: @escaping (Bool) -> Void = { _ in },
+        onPillSizeChange: @escaping (CGSize) -> Void = { _ in }
+    ) {
+        self.model = model
+        self.onClick = onClick
+        self.onRowClick = onRowClick
+        self.onChipClick = onChipClick
+        self.onInflightHover = onInflightHover
+        self.onEngagementChange = onEngagementChange
+        self.onPillSizeChange = onPillSizeChange
+    }
 
     /// Drop-down height for in-flight bodies that fit on one body
     /// line. Two-line bodies get `extraHeightTwoLine` instead so the
@@ -192,6 +224,17 @@ struct NotchPillView: View {
         .animation(.easeInOut(duration: 0.28), value: liveStack.first?.id)
         .onHover { hovering in handlePillHover(hovering) }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+        // Compute pill size directly from model state and publish it
+        // every time the body recomputes. Bypasses SwiftUI's
+        // .background(GeometryReader { ... }) measurement which kept
+        // returning .zero. We feed `pillVisible`, pillWidth and
+        // pillHeight into a tuple so .onChange fires on any of them.
+        .onChange(of: SizeReport(visible: pillVisible, width: pillWidth, height: pillHeight)) { rep in
+            onPillSizeChange(rep.visible ? CGSize(width: rep.width, height: rep.height) : .zero)
+        }
+        .onAppear {
+            onPillSizeChange(pillVisible ? CGSize(width: pillWidth, height: pillHeight) : .zero)
+        }
         .onChange(of: model.chipstacks.map(\.id)) { newIDs in
             if let id = hoveredChipstackID, !newIDs.contains(id) {
                 hoveredChipstackID = nil
