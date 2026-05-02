@@ -25,8 +25,12 @@ struct GhosttyFocusProvider: FocusProvider {
         guard context.detectedBundle == "com.mitchellh.ghostty" else { return nil }
         guard let tty = context.callerTTY else { return nil }
         let short = tty.hasPrefix("/dev/") ? String(tty.dropFirst("/dev/".count)) : tty
-        let activate = "osascript -e 'tell application \"Ghostty\" to activate'"
+        // Run activate + focus in one osascript invocation. Each
+        // osascript spawn costs ~100-200ms of fork/exec plus
+        // AppleScript bridge startup; doing both in one process
+        // roughly halves the click-to-focus latency.
+        let activate = "tell application \"Ghostty\" to activate"
         let focus = "tell application \"Ghostty\" to focus (first terminal whose name contains \"\(short)\")"
-        return "\(activate); osascript -e '\(focus)' 2>/dev/null"
+        return "osascript -e '\(activate)' -e '\(focus)' 2>/dev/null"
     }
 }
