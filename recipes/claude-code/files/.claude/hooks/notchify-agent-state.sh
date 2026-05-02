@@ -8,13 +8,13 @@
 # agent state) belongs in a separate hook script. See the recipe
 # README for context.
 #
-# Universal assumption: the user runs claude inside tmux, so the
-# pane's TMUX_PANE env var is set; if not, the hook exits silently.
+# Works whether or not the user runs claude inside tmux. With tmux,
+# the title carries session:window for disambiguation; without tmux,
+# the title is just "claude" (or the /rename custom title if set).
 
 set -eu
 
 state="${1:-}"
-[ -n "${TMUX_PANE:-}" ] || exit 0
 command -v notchify >/dev/null 2>&1 || exit 0
 
 case "$state" in
@@ -102,10 +102,15 @@ print(out[:60])
 PY
 }
 
-# Default title is "claude <session>:<window>" from tmux. If claude
-# has been /renamed, prefer the custom title from the transcript.
-loc=$(tmux display-message -pt "$TMUX_PANE" '#{session_name}:#{window_name}' 2>/dev/null || echo "")
-title="claude ${loc:-session}"
+# Build the default title. With tmux, qualify "claude" with
+# session:window so the user can tell concurrent sessions apart;
+# without tmux, fall back to a bare "claude". Either way, a
+# /rename custom title from the transcript wins if present.
+title="claude"
+if [ -n "${TMUX_PANE:-}" ] && command -v tmux >/dev/null 2>&1; then
+    loc=$(tmux display-message -pt "$TMUX_PANE" '#{session_name}:#{window_name}' 2>/dev/null || echo "")
+    [ -n "$loc" ] && title="claude $loc"
+fi
 transcript=$(printf %s "$payload" | sed -n 's/.*"transcript_path":"\([^"]*\)".*/\1/p')
 custom=$(extract_session_title "$transcript")
 [ -n "$custom" ] && title="$custom"

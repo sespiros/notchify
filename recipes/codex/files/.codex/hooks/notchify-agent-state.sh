@@ -7,13 +7,13 @@
 # tmux statusline integration (e.g. coloring per-pane dots based on
 # agent state) belongs in a separate hook script.
 #
-# Universal assumption: the user runs codex inside tmux, so the
-# pane's TMUX_PANE env var is set; if not, the hook exits silently.
+# Works whether or not the user runs codex inside tmux. With tmux,
+# the title carries session:window for disambiguation; without tmux,
+# the title is just "codex".
 
 set -eu
 
 state="${1:-}"
-[ -n "${TMUX_PANE:-}" ] || exit 0
 command -v notchify >/dev/null 2>&1 || exit 0
 
 case "$state" in
@@ -36,8 +36,11 @@ if [ -f "$stamp" ]; then
 fi
 echo "$now" > "$stamp"
 
-loc=$(tmux display-message -pt "$TMUX_PANE" '#{session_name}:#{window_name}' 2>/dev/null || echo "")
-title="codex ${loc:-session}"
+title="codex"
+if [ -n "${TMUX_PANE:-}" ] && command -v tmux >/dev/null 2>&1; then
+    loc=$(tmux display-message -pt "$TMUX_PANE" '#{session_name}:#{window_name}' 2>/dev/null || echo "")
+    [ -n "$loc" ] && title="codex $loc"
+fi
 
 # Group key is constant per agent + state, so every codex pane's
 # notifications coalesce into one chip stack regardless of tmux pane,
