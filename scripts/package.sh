@@ -5,7 +5,10 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="$ROOT/dist/Notchify.app"
-DMG="$ROOT/dist/Notchify.dmg"
+# Version pulled from the canonical source (Info.plist) so the DMG
+# filename always matches the bundle's CFBundleShortVersionString.
+VERSION=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" "$ROOT/Resources/Info.plist")
+DMG="$ROOT/dist/Notchify-${VERSION}.dmg"
 
 # Force Xcode's toolchain. Some package managers / system setups point
 # DEVELOPER_DIR or SDKROOT at an SDK whose Swift version doesn't match
