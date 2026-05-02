@@ -54,8 +54,17 @@ Drag-install:
 1. Grab the latest `Notchify.dmg` from Releases (or run `./scripts/package.sh`
    and use the produced `dist/Notchify.dmg`).
 2. Open the DMG and drag `Notchify.app` to `/Applications`.
-3. First launch may require right-click → Open (the bundle is ad-hoc-signed,
-   not Developer-ID-signed).
+3. The bundle is only ad-hoc signed (no Apple Developer ID), so first
+   launch from a downloaded DMG hits Gatekeeper. Two options:
+   - Strip the quarantine attribute and launch normally:
+     ```sh
+     xattr -d com.apple.quarantine /Applications/Notchify.app
+     open /Applications/Notchify.app
+     ```
+   - Or open System Settings → Privacy & Security, scroll to "Notchify
+     was blocked", click **Open Anyway**, then confirm. (On macOS 15+,
+     right-click → Open no longer bypasses this; the System Settings
+     button is the only GUI path.)
 4. Click the menubar icon → **Install CLI in /usr/local/bin** (creates the
    symlink with the standard macOS admin prompt). Skip if you only need
    the GUI.
