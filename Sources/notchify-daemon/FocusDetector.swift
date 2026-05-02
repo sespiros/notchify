@@ -120,13 +120,19 @@ enum FocusDetector {
 
     private static func resolveTmuxBinary() -> String? {
         // Daemons launched via launchd inherit a minimal PATH that
-        // doesn't include Homebrew prefixes, so a plain `command -v
-        // tmux` often finds nothing. Probe the usual install
-        // locations directly first, then fall back to PATH lookup.
+        // doesn't include Homebrew or Nix prefixes, so a plain
+        // `command -v tmux` often finds nothing. Probe the usual
+        // install locations directly first, then fall back to PATH
+        // lookup.
+        let home = NSHomeDirectory()
         let candidates = [
-            "/opt/homebrew/bin/tmux",   // Apple Silicon Homebrew
-            "/usr/local/bin/tmux",       // Intel Homebrew / older
+            "/opt/homebrew/bin/tmux",                              // Apple Silicon Homebrew
+            "/usr/local/bin/tmux",                                  // Intel Homebrew / older
             "/usr/bin/tmux",
+            "/run/current-system/sw/bin/tmux",                      // nix-darwin system profile
+            "/etc/profiles/per-user/\(NSUserName())/bin/tmux",     // nix-darwin per-user profile
+            "\(home)/.nix-profile/bin/tmux",                        // single-user Nix
+            "/nix/var/nix/profiles/default/bin/tmux",               // multi-user Nix default profile
         ]
         for path in candidates {
             if FileManager.default.isExecutableFile(atPath: path) {
