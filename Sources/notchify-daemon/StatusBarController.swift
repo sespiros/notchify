@@ -10,6 +10,9 @@ final class StatusBarController: NSObject {
     private let installCLIItem = NSMenuItem(
         title: "Install CLI in /usr/local/bin", action: nil, keyEquivalent: ""
     )
+    private let integrations = IntegrationsMenu()
+    private var badgeView: NSView?
+    private var refreshTimer: Timer?
 
     private static let cliDestination = "/usr/local/bin/notchify"
 
@@ -19,6 +22,30 @@ final class StatusBarController: NSObject {
 
         if let button = item.button {
             button.image = Self.makeIconImage()
+            // Small red dot pinned to the bottom-right of the status
+            // icon as a subview, so it can show/hide without us having
+            // to maintain a non-template variant of the icon (the
+            // plain icon stays template-tinted by macOS automatically
+            // across light/dark). NSStatusBarButton uses a non-flipped
+            // coordinate system, so y=0 is the bottom edge.
+            let dotSize: CGFloat = 6
+            let dot = NSView()
+            dot.translatesAutoresizingMaskIntoConstraints = false
+            dot.wantsLayer = true
+            dot.layer?.backgroundColor = NSColor.systemRed.cgColor
+            dot.layer?.cornerRadius = dotSize / 2
+            dot.isHidden = true
+            button.addSubview(dot)
+            // Overlap the icon's bottom-right corner so the badge
+            // sits ON the icon rather than alongside it (matches the
+            // System Settings / App Store update-indicator look).
+            NSLayoutConstraint.activate([
+                dot.widthAnchor.constraint(equalToConstant: dotSize),
+                dot.heightAnchor.constraint(equalToConstant: dotSize),
+                dot.trailingAnchor.constraint(equalTo: button.trailingAnchor, constant: -5),
+                dot.bottomAnchor.constraint(equalTo: button.bottomAnchor, constant: -3),
+            ])
+            badgeView = dot
         }
 
         let menu = NSMenu()
@@ -36,6 +63,8 @@ final class StatusBarController: NSObject {
         installCLIItem.target = self
         menu.addItem(installCLIItem)
 
+        menu.addItem(integrations.rootItem)
+
         menu.addItem(.separator())
 
         menu.addItem(NSMenuItem(
@@ -43,6 +72,19 @@ final class StatusBarController: NSObject {
         ).withTarget(self))
 
         item.menu = menu
+
+        // Wire integrations badge: hide/show menubar dot in sync
+        // with the IntegrationsMenu's pending state. Initial poll
+        // and a low-frequency periodic refresh so updates surface
+        // without the user having to open the menu first.
+        integrations.onPendingChange = { [weak self] pending in
+            self?.badgeView?.isHidden = !pending
+        }
+        integrations.refresh()
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 600, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.integrations.refresh() }
+        }
+
         refreshLaunchAtLoginState()
         refreshCLIState()
     }

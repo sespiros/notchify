@@ -122,28 +122,57 @@ func runVerify(_ recipeDir: String, prefix: String) -> Bool {
     return proc.terminationStatus != 0
 }
 
-func cmdStatus() {
+struct RecipeStatus {
+    let name: String
+    let available: String
+    let installed: String?
+    let drift: Bool
+}
+
+func collectStatus() -> [RecipeStatus] {
     let root = recipesDir()
     let prefix = ProcessInfo.processInfo.environment["NOTCHIFY_PREFIX"]
         ?? ProcessInfo.processInfo.environment["HOME"]!
     let installedDir = "\(prefix)/.config/notchify/installed"
-    var anyDrift = false
-    for name in listRecipes(root) {
+    return listRecipes(root).map { name in
         let recipeDir = (root as NSString).appendingPathComponent(name)
         let avail = readVersion("\(recipeDir)/VERSION")
         let installedFile = "\(installedDir)/\(name)"
         if FileManager.default.fileExists(atPath: installedFile) {
             let inst = readVersion(installedFile)
+            let drift = runVerify(recipeDir, prefix: prefix)
+            return RecipeStatus(name: name, available: avail, installed: inst, drift: drift)
+        } else {
+            return RecipeStatus(name: name, available: avail, installed: nil, drift: false)
+        }
+    }
+}
+
+func cmdStatus(json: Bool) {
+    let entries = collectStatus()
+    if json {
+        // Hand-rolled JSON to keep the binary's surface tiny. Strings here
+        // come from filenames and a VERSION file; assume safe characters.
+        let parts = entries.map { e -> String in
+            let installed = e.installed.map { "\"\($0)\"" } ?? "null"
+            return "{\"name\":\"\(e.name)\",\"available\":\"\(e.available)\",\"installed\":\(installed),\"drift\":\(e.drift)}"
+        }
+        print("[" + parts.joined(separator: ",") + "]")
+        return
+    }
+    var anyDrift = false
+    for e in entries {
+        if let inst = e.installed {
             var notes: [String] = []
-            if inst != avail { notes.append("update available") }
-            if runVerify(recipeDir, prefix: prefix) {
+            if inst != e.available { notes.append("update available") }
+            if e.drift {
                 notes.append("registrations missing — re-run install")
                 anyDrift = true
             }
             let suffix = notes.isEmpty ? "" : "  (" + notes.joined(separator: "; ") + ")"
-            print("\(name): installed v\(inst), available v\(avail)\(suffix)")
+            print("\(e.name): installed v\(inst), available v\(e.available)\(suffix)")
         } else {
-            print("\(name): not installed (available v\(avail))")
+            print("\(e.name): not installed (available v\(e.available))")
         }
     }
     if anyDrift { exit(1) }
@@ -189,7 +218,7 @@ switch cmd {
 case "list":
     cmdList()
 case "status":
-    cmdStatus()
+    cmdStatus(json: rest.contains("--json"))
 case "install":
     let (name, prefix, dryRun) = parseInstallArgs(rest)
     let dir = resolveRecipe(name)
