@@ -94,6 +94,10 @@ transcript=$(printf %s "$payload" | sed -n 's/.*"transcript_path":"\([^"]*\)".*/
 custom=$(extract_session_title "$transcript")
 [ -n "$custom" ] && title="$custom"
 
+# Group key is constant per agent + state, so every claude pane's
+# notifications coalesce into one chip stack regardless of tmux pane,
+# session, window, or transcript /rename. The display title still
+# carries the per-session detail; only grouping is global.
 case "$state" in
     blocked)
         # The hook payload's `message` field is set for some kinds of
@@ -104,11 +108,11 @@ case "$state" in
         body="${message:-waiting for input}"
         notchify "$title" "$body" -sound info \
                  -icon "$HOME/.config/claude/icons/blocked.png" \
-                 -group "$title blocked" -focus &
+                 -group "claude:blocked" -focus &
         ;;
     idle)
         notchify "$title" "done" -sound ready \
                  -icon "$HOME/.config/claude/icons/done.png" \
-                 -group "$title done" -focus &
+                 -group "claude:done" -focus &
         ;;
 esac

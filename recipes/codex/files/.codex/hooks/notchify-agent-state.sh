@@ -24,15 +24,19 @@ esac
 loc=$(tmux display-message -pt "$TMUX_PANE" '#{session_name}:#{window_name}' 2>/dev/null || echo "")
 title="codex ${loc:-session}"
 
+# Group key is constant per agent + state, so every codex pane's
+# notifications coalesce into one chip stack regardless of tmux pane,
+# session, or window. The display title still carries the per-session
+# detail; only grouping is global.
 case "$state" in
     blocked)
         notchify "$title" "waiting for input" -sound info \
                  -icon "$HOME/.config/codex/icons/blocked.png" \
-                 -group "$title blocked" -focus &
+                 -group "codex:blocked" -focus &
         ;;
     idle)
         notchify "$title" "done" -sound ready \
                  -icon "$HOME/.config/codex/icons/done.png" \
-                 -group "$title done" -focus &
+                 -group "codex:done" -focus &
         ;;
 esac
