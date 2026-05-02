@@ -182,8 +182,15 @@ final class IntegrationsMenu: NSObject, NSMenuDelegate {
         let exe = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
         let bin = exe.deletingLastPathComponent()
         let roots = [
+            // .app bundle: Contents/MacOS -> Contents/share/notchify/recipes
             bin.appendingPathComponent("../share/notchify/recipes/\(name)/files/.config").standardized,
+            // Plain swift build: .build/debug -> repo/recipes
             bin.appendingPathComponent("../../recipes/\(name)/files/.config").standardized,
+            // swift run on Apple silicon: the user-visible
+            // .build/debug/notchify-daemon symlinks to
+            // .build/arm64-apple-macosx/debug/notchify-daemon, which
+            // is one directory deeper relative to repo/recipes.
+            bin.appendingPathComponent("../../../recipes/\(name)/files/.config").standardized,
         ]
         let fm = FileManager.default
         for root in roots {
@@ -276,9 +283,16 @@ final class IntegrationsMenu: NSObject, NSMenuDelegate {
         let exe = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
         let cli = exe.deletingLastPathComponent().appendingPathComponent("notchify").path
         guard FileManager.default.fileExists(atPath: cli) else { return }
+        var args = [title, body, "-sound", "ready", "-group", group]
+        // Use notchify's own menubar-style glyph (rendered to a temp
+        // PNG in white, sized for the chip) so install confirmations
+        // are visibly branded as notchify and not anonymous chips.
+        if let icon = StatusBarController.chipIconPath() {
+            args.append(contentsOf: ["-icon", icon])
+        }
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: cli)
-        proc.arguments = [title, body, "-sound", "ready", "-group", group]
+        proc.arguments = args
         try? proc.run()
     }
 }

@@ -166,7 +166,29 @@ final class StatusBarController: NSObject {
 
     // Custom menubar glyph: a tiny "MacBook with notch" silhouette.
     private static func makeIconImage() -> NSImage {
-        let size = NSSize(width: 20, height: 14)
+        return makeIconImage(size: NSSize(width: 20, height: 14), fill: .black, isTemplate: true)
+    }
+
+    /// Render the same MacBook-with-notch silhouette at a larger size
+    /// in white, suitable for use as a chip icon over the notch
+    /// pill's black background. Used by the Integrations menu to
+    /// brand its install confirmation popups.
+    nonisolated static func chipIconPath() -> String? {
+        let path = (NSTemporaryDirectory() as NSString).appendingPathComponent("notchify-chip-icon.png")
+        if FileManager.default.fileExists(atPath: path) { return path }
+        let img = makeIconImage(size: NSSize(width: 64, height: 44), fill: .white, isTemplate: false)
+        guard let tiff = img.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiff),
+              let png = rep.representation(using: .png, properties: [:]) else { return nil }
+        do {
+            try png.write(to: URL(fileURLWithPath: path))
+            return path
+        } catch {
+            return nil
+        }
+    }
+
+    nonisolated private static func makeIconImage(size: NSSize, fill: NSColor, isTemplate: Bool) -> NSImage {
         let img = NSImage(size: size)
         img.lockFocus()
         defer { img.unlockFocus() }
@@ -174,31 +196,34 @@ final class StatusBarController: NSObject {
 
         let w = size.width
         let h = size.height
+        // Path geometry was tuned for the 20x14 menubar size; scale
+        // proportionally for any other render target.
+        let s = min(w / 20, h / 14)
 
         // Display rectangle: rounded rectangle filling most of the icon.
-        let displayRect = CGRect(x: 1, y: 2, width: w - 2, height: h - 3)
+        let displayRect = CGRect(x: 1 * s, y: 2 * s, width: w - 2 * s, height: h - 3 * s)
         let displayPath = CGPath(
             roundedRect: displayRect,
-            cornerWidth: 2.0,
-            cornerHeight: 2.0,
+            cornerWidth: 2.0 * s,
+            cornerHeight: 2.0 * s,
             transform: nil
         )
         ctx.addPath(displayPath)
-        ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
+        ctx.setFillColor(fill.cgColor)
         ctx.fillPath()
 
         // Notch hanging from the top edge of the display, with rounded
         // bottom corners. Drawn in the foreground color (black) but cut
         // back to transparent by punching it out using clear blend mode.
-        let notchW: CGFloat = 6
-        let notchH: CGFloat = 2.5
-        let notchRadius: CGFloat = 0.9
+        let notchW: CGFloat = 6 * s
+        let notchH: CGFloat = 2.5 * s
+        let notchRadius: CGFloat = 0.9 * s
         let notchTop = displayRect.maxY
         let notchY = notchTop - notchH
         let notchX = (w - notchW) / 2
         let notch = CGMutablePath()
-        notch.move(to: CGPoint(x: notchX, y: notchTop + 0.5))
-        notch.addLine(to: CGPoint(x: notchX + notchW, y: notchTop + 0.5))
+        notch.move(to: CGPoint(x: notchX, y: notchTop + 0.5 * s))
+        notch.addLine(to: CGPoint(x: notchX + notchW, y: notchTop + 0.5 * s))
         notch.addLine(to: CGPoint(x: notchX + notchW, y: notchY + notchRadius))
         notch.addQuadCurve(
             to: CGPoint(x: notchX + notchW - notchRadius, y: notchY),
@@ -215,7 +240,7 @@ final class StatusBarController: NSObject {
         ctx.fillPath()
         ctx.setBlendMode(.normal)
 
-        img.isTemplate = true
+        img.isTemplate = isTemplate
         return img
     }
 }

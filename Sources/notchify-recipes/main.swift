@@ -44,8 +44,12 @@ func recipesDir() -> String {
         .resolvingSymlinksInPath()
     let binDir = exe.deletingLastPathComponent()
     let candidates = [
+        // .app bundle install
         binDir.appendingPathComponent("../share/notchify/recipes").path,
+        // Plain `swift build` layout: .build/debug -> repo
         binDir.appendingPathComponent("../../recipes").path,
+        // `swift run` arch-specific deep path:
+        // .build/arm64-apple-macosx/debug -> repo
         binDir.appendingPathComponent("../../../recipes").path,
     ]
     let fm = FileManager.default
