@@ -22,6 +22,21 @@ case "$state" in
     *) exit 0 ;;
 esac
 
+payload=$(cat 2>/dev/null || true)
+
+# The Notification event fires for both permission_prompt (claude
+# needs the user to approve a tool call, actionable) and
+# idle_prompt (claude has been waiting ~60s for input, just a nag).
+# The nag pops up after the user has already engaged with a previous
+# notification but hasn't typed yet, which reads as a spurious
+# duplicate. Drop it; only the permission case warrants a popup.
+if [ "$state" = "blocked" ]; then
+    notification_type=$(printf %s "$payload" | sed -n 's/.*"notification_type":"\([^"]*\)".*/\1/p')
+    if [ "$notification_type" = "idle_prompt" ]; then
+        exit 0
+    fi
+fi
+
 # Debounce: Claude Code's Stop hook fires multiple times per turn
 # when the assistant alternates between text and tool calls, which
 # otherwise spams a "done" popup per phase. Skip the notify if we
@@ -37,8 +52,6 @@ if [ -f "$stamp" ]; then
     fi
 fi
 echo "$now" > "$stamp"
-
-payload=$(cat 2>/dev/null || true)
 
 # extract_session_title <transcript_path>
 # ---------------------------------------
