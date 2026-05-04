@@ -10,7 +10,9 @@ Currently shipped:
 - **claude-code** — Claude Code: popup on Stop / Notification, with
   optional `/rename` session title and tool-aware blocked-message
   hints.
-- **codex** — OpenAI Codex CLI: popup on Stop / Notification.
+- **codex** — OpenAI Codex CLI: popup on Stop, with assistant
+  handoffs classified as waiting-for-input, plus PermissionRequest
+  popups when Codex asks for approval.
 
 Both work with or without tmux. iTerm, Terminal.app, Ghostty, WezTerm,
 kitty all supported.
@@ -47,10 +49,11 @@ For each recipe:
 
 1. Lays down the hook script under `~/.<agent>/hooks/`.
 2. Lays down icons under `~/.config/<agent>/icons/`.
-3. Idempotently merges hook registrations for `Stop` and
-   `Notification` into the agent's config file (`~/.claude/settings.json`
-   for Claude Code, `~/.codex/hooks.json` for Codex). Other tools'
-   entries in the same file are preserved.
+3. Idempotently merges supported hook registrations into the agent's
+   config file (`~/.claude/settings.json` for Claude Code,
+   `~/.codex/hooks.json` for Codex). Claude Code registers `Stop` and
+   `Notification`; Codex registers `Stop` and `PermissionRequest`.
+   Other tools' entries in the same file are preserved.
 4. Records the installed version under
    `~/.config/notchify/installed/<recipe>` so the menubar drift
    indicator can compare against the bundled version.

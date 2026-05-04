@@ -14,7 +14,7 @@ nr_install_files
 hook_path="$NR_PREFIX/.codex/hooks/notchify-agent-state.sh"
 nr_hooks_register "$NR_PREFIX/.codex/hooks.json" "$hook_path" \
     "Stop:idle" \
-    "Notification:blocked"
+    "PermissionRequest:blocked"
 
 nr_stamp codex
 nr_log "done. New codex sessions will pick up the hooks; running sessions may need a restart."

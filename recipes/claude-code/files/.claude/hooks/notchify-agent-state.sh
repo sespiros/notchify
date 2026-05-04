@@ -22,7 +22,18 @@ case "$state" in
     *) exit 0 ;;
 esac
 
-payload=$(cat 2>/dev/null || true)
+read_payload() {
+    command -v python3 >/dev/null 2>&1 || return 0
+    python3 -c '
+import select, sys
+
+ready, _, _ = select.select([sys.stdin], [], [], 0)
+if ready:
+    print(sys.stdin.read(), end="")
+' 2>/dev/null || true
+}
+
+payload=$(read_payload)
 
 # The Notification event fires for both permission_prompt (claude
 # needs the user to approve a tool call, actionable) and

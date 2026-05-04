@@ -55,7 +55,7 @@ JSON
 statusline_count=$(jq '[.. | objects | select(.command? // "" | contains("tmux-statusline-state.sh"))] | length' "$TMP/.codex/hooks.json")
 notchify_count=$(jq '[.. | objects | select(.command? // "" | contains("notchify-agent-state.sh"))] | length' "$TMP/.codex/hooks.json")
 [ "$statusline_count" = 2 ] || fail "statusline entries lost (count=$statusline_count)"
-[ "$notchify_count" = 2 ] || fail "notchify entries missing (count=$notchify_count, expected Stop+Notification)"
+[ "$notchify_count" = 2 ] || fail "notchify entries missing (count=$notchify_count, expected Stop+PermissionRequest)"
 pass "codex co-existence with chezmoi-style statusline registration"
 
 echo "==> claude install merging into existing settings.json"
@@ -128,6 +128,57 @@ HOME="$TMP" PATH="$TMP/bin:$PATH" sh "$TMP/.claude/hooks/notchify-agent-state.sh
   fail "claude hook propagated notchify failure"
 
 pass "hook scripts do not fail the agent when notchify is unavailable"
+
+echo "==> codex stop hook treats assistant handoff as blocked"
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+mkdir -p "$TMP/bin"
+cat > "$TMP/bin/notchify" <<SH
+#!/bin/sh
+printf '%s\n' "\$*" >> "$TMP/notchify.log"
+SH
+chmod 755 "$TMP/bin/notchify"
+"$BIN" install codex --prefix "$TMP" >/dev/null
+payload='{"hook_event_name":"Stop","last_assistant_message":"Your manual steps: create the user. Once you confirm 1-4 done and paste me the UID, I will continue."}'
+printf %s "$payload" | HOME="$TMP" PATH="$TMP/bin:$PATH" TMPDIR="$TMP" sh "$TMP/.codex/hooks/notchify-agent-state.sh" idle ||
+  fail "codex stop hook failed while classifying input request"
+grep -q 'blocked.png' "$TMP/notchify.log" || fail "input-request stop did not use blocked notification"
+grep -q 'waiting for input' "$TMP/notchify.log" || fail "input-request stop missing waiting body"
+pass "assistant handoff becomes blocked notification"
+
+echo "==> codex stop hook leaves completion summaries idle"
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+mkdir -p "$TMP/bin"
+cat > "$TMP/bin/notchify" <<SH
+#!/bin/sh
+printf '%s\n' "\$*" >> "$TMP/notchify.log"
+SH
+chmod 755 "$TMP/bin/notchify"
+"$BIN" install codex --prefix "$TMP" >/dev/null
+payload='{"hook_event_name":"Stop","last_assistant_message":"What changed: Claude finished the cleanup and all tests passed."}'
+printf %s "$payload" | HOME="$TMP" PATH="$TMP/bin:$PATH" TMPDIR="$TMP" sh "$TMP/.codex/hooks/notchify-agent-state.sh" idle ||
+  fail "codex stop hook failed on completion summary"
+grep -q 'done' "$TMP/notchify.log" || fail "completion summary did not produce done notification"
+! grep -q 'blocked.png' "$TMP/notchify.log" || fail "completion summary was misclassified as blocked"
+pass "completion summary remains done notification"
+
+echo "==> codex permission hook notifies on approval wait"
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+mkdir -p "$TMP/bin"
+cat > "$TMP/bin/notchify" <<SH
+#!/bin/sh
+printf '%s\n' "\$*" >> "$TMP/notchify.log"
+SH
+chmod 755 "$TMP/bin/notchify"
+"$BIN" install codex --prefix "$TMP" >/dev/null
+payload='{"hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"git commit -m fix"}}'
+printf %s "$payload" | HOME="$TMP" PATH="$TMP/bin:$PATH" TMPDIR="$TMP" sh "$TMP/.codex/hooks/notchify-agent-state.sh" blocked ||
+  fail "codex permission hook failed"
+grep -q 'blocked.png' "$TMP/notchify.log" || fail "permission hook did not use blocked notification"
+grep -q 'git commit -m fix' "$TMP/notchify.log" || fail "permission hook missing command body"
+pass "permission request becomes blocked notification"
 
 if command -v shellcheck >/dev/null 2>&1; then
     echo "==> shellcheck"
