@@ -20,7 +20,7 @@ import SwiftUI
 /// Equatable bundle of the values that go into the pill's visible
 /// size, used to drive .onChange so we publish whenever any of
 /// them shifts. Avoids SwiftUI's flaky GeometryReader measurement.
-private struct SizeReport: Equatable {
+struct SizeReport: Equatable {
     let visible: Bool
     let width: CGFloat
     let height: CGFloat
@@ -35,9 +35,9 @@ struct NotchPillView: View {
     var onInflightHover: (Bool) -> Void = { _ in }
     var onEngagementChange: (Bool) -> Void = { _ in }
     /// Reports the rendered pill's size whenever it changes. The
-    /// controller keeps the panel frame matched to this visible
-    /// content so transparent animation/layout budget cannot
-    /// intercept events outside the painted pill.
+    /// controller combines this with the host view's known bounds
+    /// to compute a click-through rect (the pill is anchored
+    /// topTrailing, so origin is derivable from size + host bounds).
     /// .zero means "no visible content; let everything click through."
     var onPillSizeChange: (CGSize) -> Void = { _ in }
     init(
