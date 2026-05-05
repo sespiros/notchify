@@ -58,16 +58,14 @@ final class NotchController {
     /// dismissKey-bearing rows in the stacks.
     private var focusTimer: Timer?
 
-    /// Current visible pill size reported by SwiftUI. The panel frame
-    /// is kept to this exact size so the invisible animation/shelf
-    /// budget never intercepts clicks outside painted content.
-    private var visiblePillSize: CGSize = .zero
+    /// Whether SwiftUI currently has painted pill content. The panel
+    /// itself stays at a stable maximum size for the active notch so
+    /// AppKit does not resize the window during SwiftUI animations.
+    private var hasVisiblePillContent = false
 
     init() {
-        // Start tiny; NotchPillView publishes the real visible size
-        // once active-display notch geometry is known. Keeping the
-        // panel frame tight is what lets clicks outside the pill pass
-        // through without global cursor tracking.
+        // Start tiny; the first presentation sizes the panel to the
+        // active notch's maximum rendered pill bounds.
         let panelSize = NSSize(width: 1, height: 1)
         panel = NSPanel(
             contentRect: NSRect(origin: .zero, size: panelSize),
@@ -115,19 +113,13 @@ final class NotchController {
 
     }
 
-    /// Resize the NSPanel to the visible pill content reported by
-    /// SwiftUI. NSPanel hit testing is window-frame based at this
-    /// level, so keeping the window frame equal to painted content is
-    /// what lets clicks outside the pill pass through without global
-    /// cursor tracking.
+    /// Track whether the visible SwiftUI pill should receive mouse
+    /// events. Window size is deliberately not changed here: resizing
+    /// an NSPanel during the same state changes SwiftUI is animating
+    /// makes the notch motion visibly choppy.
     private func updateVisibleContentRect(pillSize: CGSize) {
-        visiblePillSize = pillSize
-        if pillSize.width <= 0 || pillSize.height <= 0 {
-            panel.ignoresMouseEvents = true
-            return
-        }
-        guard positionPanel(size: pillSize, orderFront: panel.isVisible) else { return }
-        panel.ignoresMouseEvents = false
+        hasVisiblePillContent = pillSize.width > 0 && pillSize.height > 0
+        panel.ignoresMouseEvents = !hasVisiblePillContent
     }
 
     func present(_ message: Message) {
@@ -363,15 +355,14 @@ final class NotchController {
     /// ordered front. Idempotent — safe to call on every `present`.
     @discardableResult
     private func ensurePanelOnScreen() -> Bool {
-        let size = visiblePillSize.width > 0 && visiblePillSize.height > 0
-            ? visiblePillSize
-            : panel.frame.size
-        return positionPanel(size: size, orderFront: true)
+        guard let geometry = NotchGeometry.current() else { return false }
+        let notchSize = geometry.notchSize
+        let size = stablePanelSize(notchSize: notchSize)
+        return positionPanel(size: size, geometry: geometry, orderFront: true)
     }
 
     @discardableResult
-    private func positionPanel(size: CGSize, orderFront: Bool) -> Bool {
-        guard let geometry = NotchGeometry.current() else { return false }
+    private func positionPanel(size: CGSize, geometry: NotchGeometry, orderFront: Bool) -> Bool {
         let notchSize = geometry.notchSize
         let panelWidth = max(size.width, 1)
         let panelHeight = max(size.height, 1)
@@ -389,6 +380,16 @@ final class NotchController {
             panel.orderFrontRegardless()
         }
         return true
+    }
+
+    private func stablePanelSize(notchSize: CGSize) -> CGSize {
+        let overflowShelfWidth = NotchPillView.shelfWidthFor(slotCount: NotchPillView.maxVisibleSlots)
+            + NotchPillView.slotSpacing
+            + NotchPillView.slotWidth / 2
+        return CGSize(
+            width: notchSize.width + overflowShelfWidth,
+            height: notchSize.height + NotchPillView.maxListHeight
+        )
     }
 
     private func startNext(newStack: Bool) {

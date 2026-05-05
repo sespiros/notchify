@@ -35,9 +35,8 @@ struct NotchPillView: View {
     var onInflightHover: (Bool) -> Void = { _ in }
     var onEngagementChange: (Bool) -> Void = { _ in }
     /// Reports the rendered pill's size whenever it changes. The
-    /// controller keeps the panel frame matched to this visible
-    /// content so transparent animation/layout budget cannot
-    /// intercept events outside the painted pill.
+    /// controller uses this to toggle event handling when the pill
+    /// appears or disappears.
     /// .zero means "no visible content; let everything click through."
     var onPillSizeChange: (CGSize) -> Void = { _ in }
     init(
