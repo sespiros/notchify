@@ -62,12 +62,11 @@ struct KittyWindowDetector: FocusDetectorProvider {
 
 ### Why detectors abstain
 
-The Ghostty window detector abstains outside Ghostty *and* outside
-tmux.
-The "outside tmux" abstention is the v0.3.1 fix: when there's no
-multi-window-same-server ambiguity to resolve, requiring a
-title-contains-tty match would suppress every dismissal because the
-user has no reason to embed the tty in the title.
+The Ghostty window detector abstains outside Ghostty, or when the
+dismiss key has no tty. For Ghostty keys with a tty, it requires the
+focused Ghostty window title to contain that tty's short form. This
+prevents a different frontmost Ghostty window from satisfying the
+bundle-only baseline for non-tmux notifications.
 
 The tmux pane detector abstains when the dismiss key has no
 `tmuxPane`.
