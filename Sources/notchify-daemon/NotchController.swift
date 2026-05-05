@@ -58,22 +58,17 @@ final class NotchController {
     /// dismissKey-bearing rows in the stacks.
     private var focusTimer: Timer?
 
-    /// Pill rect in screen coordinates, used by the global mouse
-    /// monitor to decide whether the panel should currently swallow
-    /// or pass through mouse events. Updated on pill-size publishes
-    /// and on panel-frame changes.
-    private var pillScreenRect: NSRect = .zero
-    private var mouseMonitor: Any?
+    /// Current visible pill size reported by SwiftUI. The panel frame
+    /// is kept to this exact size so the invisible animation/shelf
+    /// budget never intercepts clicks outside painted content.
+    private var visiblePillSize: CGSize = .zero
 
     init() {
-        // Pre-allocate enough horizontal room for the notch plus a row
-        // of slots, and enough vertical room for the in-flight drop +
-        // hover-expanded list. The panel is invisible; only its
-        // content paints, so over-sizing just costs empty pixels.
-        let panelSize = NSSize(
-            width: NotchController.maxNotchWidth + NotchController.shelfBudget,
-            height: NotchController.maxNotchHeight + NotchPillView.extraHeight + NotchController.expansionShelf
-        )
+        // Start tiny; NotchPillView publishes the real visible size
+        // once active-display notch geometry is known. Keeping the
+        // panel frame tight is what lets clicks outside the pill pass
+        // through without global cursor tracking.
+        let panelSize = NSSize(width: 1, height: 1)
         panel = NSPanel(
             contentRect: NSRect(origin: .zero, size: panelSize),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -86,7 +81,7 @@ final class NotchController {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
-        panel.ignoresMouseEvents = false
+        panel.ignoresMouseEvents = true
         panel.isMovable = false
         panel.hidesOnDeactivate = false
         panel.animationBehavior = .none
@@ -118,50 +113,21 @@ final class NotchController {
             onPillSizeChange: { [weak self] size in self?.updateVisibleContentRect(pillSize: size) }
         )
 
-        // NSPanel at .statusBar level swallows clicks across its
-        // entire frame regardless of NSHostingView.hitTest, so we
-        // toggle window-level ignoresMouseEvents based on cursor
-        // position. When the cursor is over the visible pill rect
-        // the window receives clicks; everywhere else, clicks pass
-        // straight through to the app underneath.
-        panel.ignoresMouseEvents = true
-        mouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved]) { [weak self] _ in
-            Task { @MainActor in self?.updateIgnoresMouseEvents() }
-        }
-        NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved]) { [weak self] event in
-            Task { @MainActor in self?.updateIgnoresMouseEvents() }
-            return event
-        }
     }
 
-    private func updateIgnoresMouseEvents() {
-        let cursor = NSEvent.mouseLocation
-        let over = pillScreenRect.width > 0 && pillScreenRect.contains(cursor)
-        if panel.ignoresMouseEvents != !over {
-            panel.ignoresMouseEvents = !over
-        }
-    }
-
-    /// Translate the SwiftUI-published pill size into a screen-coords
-    /// rect used by the global mouse monitor to flip the panel's
-    /// ignoresMouseEvents on/off based on cursor position. The pill
-    /// is anchored topTrailing in the panel, and the panel's screen
-    /// frame uses bottom-left origin, so the pill's right edge =
-    /// panel.maxX and its top edge = panel.maxY.
+    /// Resize the NSPanel to the visible pill content reported by
+    /// SwiftUI. NSPanel hit testing is window-frame based at this
+    /// level, so keeping the window frame equal to painted content is
+    /// what lets clicks outside the pill pass through without global
+    /// cursor tracking.
     private func updateVisibleContentRect(pillSize: CGSize) {
+        visiblePillSize = pillSize
         if pillSize.width <= 0 || pillSize.height <= 0 {
-            pillScreenRect = .zero
-            updateIgnoresMouseEvents()
+            panel.ignoresMouseEvents = true
             return
         }
-        let pf = panel.frame
-        pillScreenRect = NSRect(
-            x: pf.maxX - pillSize.width,
-            y: pf.maxY - pillSize.height,
-            width: pillSize.width,
-            height: pillSize.height
-        )
-        updateIgnoresMouseEvents()
+        guard positionPanel(size: pillSize, orderFront: panel.isVisible) else { return }
+        panel.ignoresMouseEvents = false
     }
 
     func present(_ message: Message) {
@@ -397,10 +363,18 @@ final class NotchController {
     /// ordered front. Idempotent — safe to call on every `present`.
     @discardableResult
     private func ensurePanelOnScreen() -> Bool {
+        let size = visiblePillSize.width > 0 && visiblePillSize.height > 0
+            ? visiblePillSize
+            : panel.frame.size
+        return positionPanel(size: size, orderFront: true)
+    }
+
+    @discardableResult
+    private func positionPanel(size: CGSize, orderFront: Bool) -> Bool {
         guard let geometry = NotchGeometry.current() else { return false }
         let notchSize = geometry.notchSize
-        let panelWidth = panel.frame.width
-        let panelHeight = panel.frame.height
+        let panelWidth = max(size.width, 1)
+        let panelHeight = max(size.height, 1)
         let notchRight = geometry.notchRect.maxX
         let originX = notchRight - panelWidth
         let originY = geometry.notchRect.maxY - panelHeight
@@ -409,8 +383,9 @@ final class NotchController {
             NSRect(x: originX, y: originY, width: panelWidth, height: panelHeight),
             display: false
         )
+        hosting.frame = NSRect(origin: .zero, size: NSSize(width: panelWidth, height: panelHeight))
         model.notchSize = notchSize
-        if !panel.isVisible {
+        if orderFront && !panel.isVisible {
             panel.orderFrontRegardless()
         }
         return true
@@ -771,13 +746,6 @@ final class NotchController {
         }
     }
 
-    private static let maxNotchWidth: CGFloat = 320
-    private static let maxNotchHeight: CGFloat = 40
-    /// Reserved horizontal room for the shelf. Sized for ~6 slots.
-    private static let shelfBudget: CGFloat = 240
-    /// Reserved vertical room below the notch for hover-expanded
-    /// row lists. Sized for ~5 rows at ~50pt each.
-    private static let expansionShelf: CGFloat = 280
     /// Phase a → b gap: matches the 0.22s pill slide-in animation.
     private static let slideInDuration: Int = 150
     /// Phase b → c gap: drop-down for text starts after shelf+icon
