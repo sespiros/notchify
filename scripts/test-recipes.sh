@@ -20,6 +20,13 @@ command -v jq >/dev/null || { echo "test needs jq"; exit 1; }
 echo "==> building notchify-recipes"
 swift build --product notchify-recipes >/dev/null
 BIN="$ROOT/.build/debug/notchify-recipes"
+CLI_TMP=$(mktemp -d)
+cat > "$CLI_TMP/notchify" <<'SH'
+#!/bin/sh
+exit 0
+SH
+chmod 755 "$CLI_TMP/notchify"
+export NOTCHIFY_CLI="$CLI_TMP/notchify"
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 pass() { echo "  ok: $*"; }
@@ -110,6 +117,27 @@ JSON
 out=$(NOTCHIFY_PREFIX="$TMP" "$BIN" status 2>&1) && fail "status did not return nonzero on drift" || true
 echo "$out" | grep -q "registrations missing" || fail "status missing drift message: $out"
 pass "drift detected after external rewrite"
+
+echo "==> install requires the notchify CLI"
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+missing="$TMP/notchify-missing"
+out=$(NOTCHIFY_CLI="$missing" "$BIN" install codex --prefix "$TMP" 2>&1) &&
+  fail "install succeeded without notchify CLI" || true
+echo "$out" | grep -q "notchify CLI not found" || fail "missing-CLI error was unclear: $out"
+pass "recipe install reports missing CLI prerequisite"
+
+echo "==> status reports installed recipes when the CLI is missing"
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+"$BIN" install codex --prefix "$TMP" >/dev/null
+out=$(NOTCHIFY_CLI="$TMP/notchify-missing" NOTCHIFY_PREFIX="$TMP" "$BIN" status 2>&1) &&
+  fail "status succeeded despite missing CLI" || true
+echo "$out" | grep -q "notchify CLI missing" || fail "status missing CLI warning: $out"
+json=$(NOTCHIFY_CLI="$TMP/notchify-missing" NOTCHIFY_PREFIX="$TMP" "$BIN" status --json 2>/dev/null || true)
+echo "$json" | jq -e '.[] | select(.name == "codex" and .cliAvailable == false)' >/dev/null ||
+  fail "status JSON missing cliAvailable=false: $json"
+pass "status surfaces missing CLI prerequisite"
 
 echo "==> hook scripts stay non-fatal if notchify itself fails"
 mkdir -p "$TMP/bin"

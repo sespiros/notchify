@@ -19,11 +19,16 @@ kitty all supported.
 
 ## Install
 
+Recipes require the `notchify` CLI to be installed system-wide first.
+Use the Notchify menubar item **Install CLI in /usr/local/bin**; hooks
+call `notchify` by name so they keep working independently of where
+the app bundle lives.
+
 Easiest path is the **Integrations** submenu in the notchify menubar
 icon. Click an integration to install or update; the menu also
 surfaces drift (a red dot) when an external tool, e.g. chezmoi or
 hand-edits, has dropped notchify's hook registrations from the live
-file.
+file, or when an installed recipe can no longer find the CLI.
 
 CLI alternative (mirrors what the menu does):
 
@@ -66,8 +71,8 @@ re-sync after an agent or chezmoi update.
 External tools (chezmoi, hand-edits, agent updates) can rewrite the
 agent's config file and drop our entries. The Integrations menu
 shows a red bullet on any recipe whose registrations are missing
-from the live file; clicking re-installs. The same signal is
-available from the CLI:
+from the live file, or whose `notchify` CLI prerequisite is missing.
+The same signal is available from the CLI:
 
 ```sh
 notchify-recipes status

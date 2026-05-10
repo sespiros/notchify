@@ -49,6 +49,7 @@ final class IntegrationsMenu: NSObject, NSMenuDelegate {
         let available: String
         let installed: String?
         let drift: Bool
+        let cliAvailable: Bool
     }
 
     nonisolated private static func recipesBinaryPath() -> String {
@@ -101,7 +102,7 @@ final class IntegrationsMenu: NSObject, NSMenuDelegate {
             return
         }
         for e in entries {
-            let needsAttention = (e.installed != nil) && (e.drift || e.installed != e.available)
+            let needsAttention = (e.installed != nil) && (!e.cliAvailable || e.drift || e.installed != e.available)
             let isClean = (e.installed != nil) && !needsAttention
             let mi = NSMenuItem(title: titleFor(e), action: nil, keyEquivalent: "")
             mi.target = self
@@ -156,6 +157,7 @@ final class IntegrationsMenu: NSObject, NSMenuDelegate {
     private func titleFor(_ e: Entry) -> String {
         let display = Self.displayName(e.name)
         if e.installed == nil { return display }
+        if !e.cliAvailable { return "\(display) (CLI missing)" }
         if e.drift { return "\(display) (reinstall needed)" }
         if e.installed != e.available { return "\(display) (update available)" }
         return display

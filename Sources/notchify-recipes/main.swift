@@ -79,7 +79,44 @@ func readVersion(_ path: String) -> String {
     return data.split(separator: "\n").first.map(String.init) ?? "?"
 }
 
-func runRecipeScript(_ recipeDir: String, _ script: String, prefix: String?, dryRun: Bool) -> Never {
+func executableExists(_ path: String) -> Bool {
+    FileManager.default.isExecutableFile(atPath: (path as NSString).expandingTildeInPath)
+}
+
+func findNotchifyCLI() -> String? {
+    let env = ProcessInfo.processInfo.environment
+    if let override = env["NOTCHIFY_CLI"], !override.isEmpty {
+        return executableExists(override) ? override : nil
+    }
+
+    let pathDirs = (env["PATH"] ?? "").split(separator: ":").map(String.init)
+    for dir in pathDirs {
+        let candidate = (dir as NSString).appendingPathComponent("notchify")
+        if executableExists(candidate) { return candidate }
+    }
+
+    let candidates = [
+        "/usr/local/bin/notchify",
+        "/opt/homebrew/bin/notchify",
+        "/run/current-system/sw/bin/notchify",
+        "\(env["HOME"] ?? "")/.nix-profile/bin/notchify",
+    ]
+    for candidate in candidates where executableExists(candidate) {
+        return candidate
+    }
+    return nil
+}
+
+func requireNotchifyCLI() {
+    guard findNotchifyCLI() != nil else {
+        die("notchify CLI not found. Use the Notchify menubar item \"Install CLI in /usr/local/bin\" before installing integrations.")
+    }
+}
+
+func runRecipeScript(_ recipeDir: String, _ script: String, prefix: String?, dryRun: Bool, requireCLI: Bool = false) -> Never {
+    if requireCLI && !dryRun {
+        requireNotchifyCLI()
+    }
     let path = (recipeDir as NSString).appendingPathComponent(script)
     guard FileManager.default.fileExists(atPath: path) else {
         die("\(script) not found at \(path)")
@@ -131,6 +168,7 @@ struct RecipeStatus {
     let available: String
     let installed: String?
     let drift: Bool
+    let cliAvailable: Bool
 }
 
 func collectStatus() -> [RecipeStatus] {
@@ -138,6 +176,7 @@ func collectStatus() -> [RecipeStatus] {
     let prefix = ProcessInfo.processInfo.environment["NOTCHIFY_PREFIX"]
         ?? ProcessInfo.processInfo.environment["HOME"]!
     let installedDir = "\(prefix)/.config/notchify/installed"
+    let cliAvailable = findNotchifyCLI() != nil
     return listRecipes(root).map { name in
         let recipeDir = (root as NSString).appendingPathComponent(name)
         let avail = readVersion("\(recipeDir)/VERSION")
@@ -145,9 +184,9 @@ func collectStatus() -> [RecipeStatus] {
         if FileManager.default.fileExists(atPath: installedFile) {
             let inst = readVersion(installedFile)
             let drift = runVerify(recipeDir, prefix: prefix)
-            return RecipeStatus(name: name, available: avail, installed: inst, drift: drift)
+            return RecipeStatus(name: name, available: avail, installed: inst, drift: drift, cliAvailable: cliAvailable)
         } else {
-            return RecipeStatus(name: name, available: avail, installed: nil, drift: false)
+            return RecipeStatus(name: name, available: avail, installed: nil, drift: false, cliAvailable: cliAvailable)
         }
     }
 }
@@ -159,7 +198,7 @@ func cmdStatus(json: Bool) {
         // come from filenames and a VERSION file; assume safe characters.
         let parts = entries.map { e -> String in
             let installed = e.installed.map { "\"\($0)\"" } ?? "null"
-            return "{\"name\":\"\(e.name)\",\"available\":\"\(e.available)\",\"installed\":\(installed),\"drift\":\(e.drift)}"
+            return "{\"name\":\"\(e.name)\",\"available\":\"\(e.available)\",\"installed\":\(installed),\"drift\":\(e.drift),\"cliAvailable\":\(e.cliAvailable)}"
         }
         print("[" + parts.joined(separator: ",") + "]")
         return
@@ -171,6 +210,10 @@ func cmdStatus(json: Bool) {
             if inst != e.available { notes.append("update available") }
             if e.drift {
                 notes.append("registrations missing — re-run install")
+                anyDrift = true
+            }
+            if !e.cliAvailable {
+                notes.append("notchify CLI missing — install CLI from the menubar")
                 anyDrift = true
             }
             let suffix = notes.isEmpty ? "" : "  (" + notes.joined(separator: "; ") + ")"
@@ -226,7 +269,7 @@ case "status":
 case "install":
     let (name, prefix, dryRun) = parseInstallArgs(rest)
     let dir = resolveRecipe(name)
-    runRecipeScript(dir, "install.sh", prefix: prefix, dryRun: dryRun)
+    runRecipeScript(dir, "install.sh", prefix: prefix, dryRun: dryRun, requireCLI: true)
 case "uninstall":
     let (name, prefix, dryRun) = parseInstallArgs(rest)
     let dir = resolveRecipe(name)
