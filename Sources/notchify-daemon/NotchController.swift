@@ -62,6 +62,16 @@ final class NotchController {
     /// itself stays at a stable maximum size for the active notch so
     /// AppKit does not resize the window during SwiftUI animations.
     private var hasVisiblePillContent = false
+    /// Painted pill rect in screen coordinates. Drives a global
+    /// mouse-moved monitor that flips the panel's `ignoresMouseEvents`
+    /// based on cursor position, so empty space inside the stable
+    /// panel frame still passes clicks through to whatever is below.
+    private var pillScreenRect: NSRect = .zero
+    /// Most recent pill size reported by SwiftUI. Cached so that
+    /// panel-frame moves (display change, notch geometry refresh) can
+    /// re-derive `pillScreenRect` without waiting for the next size
+    /// publish from the view.
+    private var lastPillSize: CGSize = .zero
 
     init() {
         // Start tiny; the first presentation sizes the panel to the
@@ -111,15 +121,54 @@ final class NotchController {
             onPillSizeChange: { [weak self] size in self?.updateVisibleContentRect(pillSize: size) }
         )
 
+        // The panel stays at `stablePanelSize` (so SwiftUI animations
+        // never trigger a window resize), so empty pixels inside that
+        // frame would otherwise eat clicks. Track the cursor and gate
+        // ignoresMouseEvents on cursor-over-painted-pill instead. Mouse
+        // events do not require accessibility permission.
+        NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved]) { [weak self] _ in
+            Task { @MainActor in self?.updateIgnoresMouseEvents() }
+        }
+        NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved]) { [weak self] event in
+            Task { @MainActor in self?.updateIgnoresMouseEvents() }
+            return event
+        }
     }
 
-    /// Track whether the visible SwiftUI pill should receive mouse
-    /// events. Window size is deliberately not changed here: resizing
-    /// an NSPanel during the same state changes SwiftUI is animating
-    /// makes the notch motion visibly choppy.
+    /// Track the painted pill in screen coordinates and refresh the
+    /// click-through gate. The panel frame itself is deliberately not
+    /// resized here: doing that mid-SwiftUI-animation makes the notch
+    /// motion visibly choppy.
     private func updateVisibleContentRect(pillSize: CGSize) {
+        lastPillSize = pillSize
         hasVisiblePillContent = pillSize.width > 0 && pillSize.height > 0
-        panel.ignoresMouseEvents = !hasVisiblePillContent
+        recomputePillScreenRect()
+        updateIgnoresMouseEvents()
+    }
+
+    /// Pill is anchored top-trailing inside the panel: its right edge
+    /// sits on `panel.maxX` and its top edge on `panel.maxY`.
+    private func recomputePillScreenRect() {
+        guard hasVisiblePillContent else {
+            pillScreenRect = .zero
+            return
+        }
+        let pf = panel.frame
+        pillScreenRect = NSRect(
+            x: pf.maxX - lastPillSize.width,
+            y: pf.maxY - lastPillSize.height,
+            width: lastPillSize.width,
+            height: lastPillSize.height
+        )
+    }
+
+    private func updateIgnoresMouseEvents() {
+        let shouldAccept = hasVisiblePillContent
+            && pillScreenRect.width > 0
+            && pillScreenRect.contains(NSEvent.mouseLocation)
+        if panel.ignoresMouseEvents != !shouldAccept {
+            panel.ignoresMouseEvents = !shouldAccept
+        }
     }
 
     func present(_ message: Message) {
@@ -376,6 +425,12 @@ final class NotchController {
         )
         hosting.frame = NSRect(origin: .zero, size: NSSize(width: panelWidth, height: panelHeight))
         model.notchSize = notchSize
+        // Panel just moved (initial show, display swap, geometry change).
+        // Re-derive the pill screen rect from the cached pill size so the
+        // cursor gate stays accurate without waiting for the next SwiftUI
+        // size publish.
+        recomputePillScreenRect()
+        updateIgnoresMouseEvents()
         if orderFront && !panel.isVisible {
             panel.orderFrontRegardless()
         }
