@@ -28,6 +28,22 @@ cp .build/release/notchify         "$APP/Contents/MacOS/notchify"
 cp .build/release/notchify-recipes "$APP/Contents/MacOS/notchify-recipes"
 cp Resources/Info.plist            "$APP/Contents/Info.plist"
 
+# Sparkle compares CFBundleVersion (not CFBundleShortVersionString) when
+# deciding whether an appcast item is newer than the running app. Keep
+# the two aligned so we only have to bump one number per release.
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${VERSION}" "$APP/Contents/Info.plist"
+
+# Bundle Sparkle.framework. The daemon binary links it via
+# @rpath/Sparkle.framework/... and SwiftPM only embeds a @loader_path
+# rpath, so we also add @executable_path/../Frameworks to find the
+# framework at the standard .app bundle location.
+mkdir -p "$APP/Contents/Frameworks"
+cp -R .build/release/Sparkle.framework "$APP/Contents/Frameworks/Sparkle.framework"
+if ! otool -l "$APP/Contents/MacOS/notchify-daemon" | grep -q "@executable_path/../Frameworks"; then
+    install_name_tool -add_rpath @executable_path/../Frameworks \
+        "$APP/Contents/MacOS/notchify-daemon"
+fi
+
 # Ship recipes as bundle data. notchify-recipes resolves
 # ../share/notchify/recipes relative to its binary, so place them
 # under Contents/share/notchify/recipes inside the .app.
