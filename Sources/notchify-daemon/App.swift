@@ -5,6 +5,7 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let server = SocketServer()
     let controller = NotchController()
+    let updater = Updater.makeIfEnabled()
     var statusBar: StatusBarController?
     private var screenObserver: NSObjectProtocol?
 
@@ -17,7 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        statusBar = StatusBarController()
+        statusBar = StatusBarController(updater: updater)
         screenObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
             object: nil,

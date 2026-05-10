@@ -9,9 +9,15 @@ let package = Package(
         .executable(name: "notchify", targets: ["notchify"]),
         .executable(name: "notchify-recipes", targets: ["notchify-recipes"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0"),
+    ],
     targets: [
         .executableTarget(
             name: "notchify-daemon",
+            dependencies: [
+                .product(name: "Sparkle", package: "Sparkle"),
+            ],
             path: "Sources/notchify-daemon",
             exclude: ["Focus/README.md"]
         ),

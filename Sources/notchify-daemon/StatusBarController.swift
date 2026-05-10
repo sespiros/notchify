@@ -1,5 +1,6 @@
 import AppKit
 import ServiceManagement
+import Sparkle
 
 @MainActor
 final class StatusBarController: NSObject {
@@ -11,12 +12,14 @@ final class StatusBarController: NSObject {
         title: "Install CLI in /usr/local/bin", action: nil, keyEquivalent: ""
     )
     private let integrations = IntegrationsMenu()
+    private let updater: Updater?
     private var badgeView: NSView?
     private var refreshTimer: Timer?
 
     private static let cliDestination = "/usr/local/bin/notchify"
 
-    override init() {
+    init(updater: Updater?) {
+        self.updater = updater
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
 
@@ -52,6 +55,20 @@ final class StatusBarController: NSObject {
         menu.addItem(NSMenuItem(
             title: "About Notchify", action: #selector(about), keyEquivalent: ""
         ).withTarget(self))
+
+        // Sparkle wires "Check for Updates…" itself: target the standard
+        // updater controller and let Sparkle's validateMenuItem(_:) gray
+        // it out while a check is in flight. Item is only added for
+        // non-Nix builds; nix-darwin manages the version directly.
+        if let updater {
+            let updateItem = NSMenuItem(
+                title: "Check for Updates…",
+                action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)),
+                keyEquivalent: ""
+            )
+            updateItem.target = updater.controller
+            menu.addItem(updateItem)
+        }
 
         menu.addItem(.separator())
 

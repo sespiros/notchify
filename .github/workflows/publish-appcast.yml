@@ -1,0 +1,62 @@
+name: publish-appcast
+
+# Sparkle's appcast entry must point to a public URL, so we wait until
+# the maintainer promotes the build workflow's draft release. On a
+# release: published event we sign the DMG and push a new <item> to the
+# appcast.xml on the gh-pages branch.
+#
+# One-time setup before this workflow does anything useful:
+#   1. Generate a Sparkle EdDSA keypair locally with Sparkle's
+#      generate_keys tool.
+#   2. Paste the public key into Resources/Info.plist (SUPublicEDKey).
+#   3. Add the private key as repository secret SPARKLE_ED_PRIVATE_KEY.
+#   4. Create the gh-pages branch with a skeleton appcast.xml:
+#        <?xml version="1.0" standalone="yes"?>
+#        <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+#          <channel>
+#            <title>Notchify</title>
+#            <description>Notchify updates</description>
+#            <language>en</language>
+#          </channel>
+#        </rss>
+#   5. Enable GitHub Pages, source = gh-pages branch, root.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  appcast:
+    runs-on: macos-latest
+    if: ${{ !github.event.release.draft && !github.event.release.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+      # Resolve Sparkle through SwiftPM so we get the same version the
+      # app is built against, rather than chasing a separate download.
+      # --target Sparkle keeps the resolution narrow.
+      - name: Fetch Sparkle CLI
+        run: swift package resolve
+
+      - name: Write EdDSA private key to disk
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          umask 077
+          printf '%s' "$SPARKLE_ED_PRIVATE_KEY" > "$RUNNER_TEMP/ed_key"
+
+      - name: Update appcast
+        env:
+          TAG:         ${{ github.event.release.tag_name }}
+          REPO:        ${{ github.repository }}
+          SIGN_UPDATE: ${{ github.workspace }}/.build/artifacts/sparkle/Sparkle/bin/sign_update
+          ED_KEY_FILE: ${{ runner.temp }}/ed_key
+          GH_TOKEN:    ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+        run: ./scripts/update-appcast.sh
