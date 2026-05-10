@@ -59,8 +59,14 @@ fi
 
 PUBDATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
 
-# CDATA-safe: split any "]]>" sequences in release notes.
-SAFE_BODY=$(printf '%s' "$RELEASE_BODY" | sed 's/]]>/]]]]><![CDATA[>/g')
+# Sparkle renders <description> as HTML, not Markdown, so the raw
+# release body collapses headers and bullets into one run-on line.
+# Push the body through GitHub's /markdown API (GFM mode) to get the
+# same rendering as the release page itself, then CDATA-escape any
+# "]]>" sequences before embedding.
+HTML_BODY=$(jq -n --arg text "$RELEASE_BODY" '{text: $text, mode: "gfm"}' \
+    | gh api -X POST /markdown --input -)
+SAFE_BODY=$(printf '%s' "$HTML_BODY" | sed 's/]]>/]]]]><![CDATA[>/g')
 
 NEW_ITEM=$(cat <<EOF
         <item>
