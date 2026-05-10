@@ -75,12 +75,19 @@ NEW_ITEM=$(cat <<EOF
 EOF
 )
 
-# Insert new item right before </channel>. awk handles the splice
-# without dragging in xmlstarlet just for one tag.
-awk -v item="$NEW_ITEM" '
-    /<\/channel>/ { print item }
-    { print }
-' appcast.xml > appcast.xml.new
+# Insert new item right before </channel>. awk -v can't carry a
+# multi-line value (BSD awk barfs with "newline in string"), so splice
+# with head/tail around the matched line instead.
+LN=$(grep -n '</channel>' appcast.xml | head -1 | cut -d: -f1)
+if [ -z "$LN" ]; then
+    echo "appcast.xml has no </channel> tag" >&2
+    exit 1
+fi
+{
+    head -n $((LN - 1)) appcast.xml
+    printf '%s\n' "$NEW_ITEM"
+    tail -n +"$LN" appcast.xml
+} > appcast.xml.new
 mv appcast.xml.new appcast.xml
 
 git add appcast.xml
