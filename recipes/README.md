@@ -13,6 +13,10 @@ Currently shipped:
 - **codex** — OpenAI Codex CLI: popup on Stop, with assistant
   handoffs classified as waiting-for-input, plus PermissionRequest
   popups when Codex asks for approval.
+- **pi** — Pi coding harness: popup on `agent_end` when the agent
+  becomes idle. Uses a Pi extension (`~/.pi/agent/extensions/*.ts`)
+  so no config-file registration is required; run `/reload` in a live
+  session to pick up the extension.
 
 Both work with or without tmux. iTerm, Terminal.app, Ghostty, WezTerm,
 kitty all supported.

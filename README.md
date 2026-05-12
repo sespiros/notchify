@@ -131,6 +131,17 @@ darwin-rebuild switch --flake . --impure
 This installs both the `notchify` CLI on PATH and `Notchify.app` to
 `/Applications`.
 
+Full list:
+
+- **claude-code** — Claude Code: popup on Stop / Notification, with
+  optional `/rename` session title and tool-aware blocked-message
+  hints.
+- **codex** — OpenAI Codex CLI: popup on Stop, with assistant
+  handoffs classified as waiting-for-input, plus PermissionRequest
+  popups when Codex asks for approval.
+- **pi** — Pi coding harness: popup on `agent_end` when the
+  agent becomes idle, with tmux session:window disambiguation.
+
 ## Agent integrations
 
 Coding agents like Claude Code and Codex CLI expose event hooks.
@@ -144,6 +155,7 @@ CLI equivalent:
 notchify-recipes list
 notchify-recipes install claude-code
 notchify-recipes install codex
+notchify-recipes install pi
 ```
 
 The menu also surfaces drift (a red dot) when an external tool such as

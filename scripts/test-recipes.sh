@@ -35,7 +35,8 @@ echo "==> list"
 out=$("$BIN" list)
 echo "$out" | grep -q '^claude-code' || fail "list missing claude-code"
 echo "$out" | grep -q '^codex' || fail "list missing codex"
-pass "list shows both recipes"
+echo "$out" | grep -q '^pi ' || fail "list missing pi"
+pass "list shows all recipes"
 
 echo "==> codex install merges into existing hooks.json"
 TMP=$(mktemp -d)
@@ -208,11 +209,48 @@ grep -q 'blocked.png' "$TMP/notchify.log" || fail "permission hook did not use b
 grep -q 'git commit -m fix' "$TMP/notchify.log" || fail "permission hook missing command body"
 pass "permission request becomes blocked notification"
 
+echo "==> pi install lays down extension and icons"
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+"$BIN" install pi --prefix "$TMP" >/dev/null
+[ -f "$TMP/.pi/agent/extensions/notchify-agent-state.ts" ] || fail "pi extension not installed"
+[ -f "$TMP/.config/pi/icons/done.png" ] || fail "pi done icon not installed"
+[ -f "$TMP/.config/pi/icons/blocked.png" ] || fail "pi blocked icon not installed"
+pass "pi files installed"
+
+echo "==> pi uninstall removes files"
+"$BIN" uninstall pi --prefix "$TMP" >/dev/null
+[ -e "$TMP/.pi/agent/extensions/notchify-agent-state.ts" ] && fail "pi extension not removed" || true
+[ -e "$TMP/.config/pi/icons/done.png" ] && fail "pi done icon not removed" || true
+pass "pi uninstall is surgical"
+
+echo "==> pi drift detection"
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+"$BIN" install pi --prefix "$TMP" >/dev/null
+NOTCHIFY_PREFIX="$TMP" "$BIN" status >/dev/null 2>&1 || fail "status reported drift on a fresh install"
+rm "$TMP/.pi/agent/extensions/notchify-agent-state.ts"
+out=$(NOTCHIFY_PREFIX="$TMP" "$BIN" status 2>&1) && fail "status did not return nonzero on drift" || true
+echo "$out" | grep -q "registrations missing" || fail "status missing drift message: $out"
+pass "pi drift detected after extension deleted"
+
+echo "==> pi extension is non-fatal when notchify is unavailable"
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+"$BIN" install pi --prefix "$TMP" >/dev/null
+# The extension is TypeScript — it won't execute in a shell,
+# so we validate it has the same "ignore notchify failure" guard
+# (try/catch on accessSync + spawnSync stdio:ignore) by inspection.
+grep -q 'try {' "$TMP/.pi/agent/extensions/notchify-agent-state.ts" || fail "pi extension missing guard"
+grep -q 'stdio: "ignore"' "$TMP/.pi/agent/extensions/notchify-agent-state.ts" || fail "pi extension missing stdio ignore"
+pass "pi extension has non-fatal guards"
+
 if command -v shellcheck >/dev/null 2>&1; then
     echo "==> shellcheck"
     shellcheck recipes/lib/install-common.sh \
                recipes/claude-code/install.sh recipes/claude-code/uninstall.sh \
                recipes/codex/install.sh recipes/codex/uninstall.sh \
+               recipes/pi/install.sh recipes/pi/uninstall.sh \
                || fail "shellcheck reported issues"
     pass "shellcheck clean"
 else

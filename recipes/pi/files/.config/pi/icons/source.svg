@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- π in block style -->
+  <!-- vertical left bar -->
+  <path fill="currentColor" d="M18 16 h12 v68 H18 Z"/>
+  <!-- vertical right bar of P loop -->
+  <path fill="currentColor" d="M50 16 h12 v24 H50 Z"/>
+  <!-- horizontal connector (top of pi) -->
+  <path fill="currentColor" d="M30 16 h34 v8 H30 Z"/>
+  <!-- dot of i -->
+  <path fill="currentColor" d="M62 52 h12 v32 H62 Z"/>
+</svg>
