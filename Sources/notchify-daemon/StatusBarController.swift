@@ -16,8 +16,6 @@ final class StatusBarController: NSObject {
     private var badgeView: NSView?
     private var refreshTimer: Timer?
 
-    private static let cliDestination = "/usr/local/bin/notchify"
-
     init(updater: Updater?) {
         self.updater = updater
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -134,13 +132,21 @@ final class StatusBarController: NSObject {
     }
 
     @objc private func installCLI() {
-        let cli = Bundle.main.bundlePath + "/Contents/MacOS/notchify"
-        // do shell script ... with administrator privileges triggers macOS's
-        // standard auth dialog. Quote both paths for safety.
+        // Derive sibling binaries from the daemon's own executable path.
+        // Using CommandLine.arguments[0] (not Bundle.main) works for
+        // both .app bundles and `swift run` / `swift build` debug layouts.
+        // Symlinks are resolved so `swift run` follows `.build/debug/`
+        // links into `.build/<arch>/debug/` where SwiftPM places the
+        // real product binaries.
+        let exe = URL(fileURLWithPath: CommandLine.arguments[0])
+            .resolvingSymlinksInPath()
+        let binDir = exe.deletingLastPathComponent()
+        let cli = binDir.appendingPathComponent("notchify").path
+        let recipes = binDir.appendingPathComponent("notchify-recipes").path
         let cliEsc = cli.replacingOccurrences(of: "\"", with: "\\\"")
-        let dstEsc = Self.cliDestination
+        let recipesEsc = recipes.replacingOccurrences(of: "\"", with: "\\\"")
         let src = """
-        do shell script "mkdir -p /usr/local/bin && ln -sf \\"\(cliEsc)\\" \\"\(dstEsc)\\"" with administrator privileges
+        do shell script "mkdir -p /usr/local/bin && ln -sf \\"\(cliEsc)\\" /usr/local/bin/notchify && ln -sf \\"\(recipesEsc)\\" /usr/local/bin/notchify-recipes" with administrator privileges
         """
         var err: NSDictionary?
         NSAppleScript(source: src)?.executeAndReturnError(&err)
@@ -151,32 +157,37 @@ final class StatusBarController: NSObject {
     }
 
     private func refreshCLIState() {
-        let path = Self.installedCLIPath()
-        let installed = path != nil
+        let prefix = Self.installedCLIPrefix()
+        let installed = prefix != nil
         installCLIItem.state = installed ? .on : .off
         installCLIItem.title = installed
-            ? "CLI installed at \(path!)"
+            ? "CLI installed at \(prefix!)"
             : "Install CLI in /usr/local/bin"
         installCLIItem.action = installed ? nil : #selector(installCLI)
     }
 
-    // Look for an existing notchify CLI in common install locations so the
-    // menu item reports "installed" regardless of how it got there
-    // (drag-install symlink, Homebrew, nix-darwin, etc.).
-    private static func installedCLIPath() -> String? {
-        var candidates = [
-            "/usr/local/bin/notchify",
-            "/opt/homebrew/bin/notchify",
-            "/run/current-system/sw/bin/notchify",
+    // Look for both notchify and notchify-recipes in common install
+    // directories. Returns the directory path (e.g. /usr/local/bin)
+    // when both binaries are present and executable, nil otherwise.
+    // Uses isExecutableFile (follows symlinks) so broken symlinks
+    // are rejected properly — unlike fileExists which sees the node.
+    private static func installedCLIPrefix() -> String? {
+        var dirs = [
+            "/usr/local/bin",
+            "/opt/homebrew/bin",
+            "/run/current-system/sw/bin",
         ]
         let userProfilesDir = "/etc/profiles/per-user"
         if let users = try? FileManager.default.contentsOfDirectory(atPath: userProfilesDir) {
             for u in users {
-                candidates.append("\(userProfilesDir)/\(u)/bin/notchify")
+                dirs.append("\(userProfilesDir)/\(u)/bin")
             }
         }
-        for c in candidates where FileManager.default.fileExists(atPath: c) {
-            return c
+        for d in dirs {
+            if FileManager.default.isExecutableFile(atPath: "\(d)/notchify")
+                && FileManager.default.isExecutableFile(atPath: "\(d)/notchify-recipes") {
+                return d
+            }
         }
         return nil
     }
