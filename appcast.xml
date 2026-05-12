@@ -40,5 +40,31 @@ xattr -d com.apple.quarantine /Applications/Notchify.app
 ```]]></description>
             <enclosure url="https://github.com/sespiros/notchify/releases/download/v0.5.1/Notchify-0.5.1.dmg" sparkle:edSignature="BELmP0smqAEuL++d/1TwUbeEeSE9CMrfK+CL218zuUoeoJcySryZ/SEM4dxKbZPUzl8tkAFxHShlTN0/fY/UCQ==" length="1881701" type="application/octet-stream"/>
         </item>
+        <item>
+            <title>v0.5.2</title>
+            <pubDate>Tue, 12 May 2026 18:06:01 +0000</pubDate>
+            <sparkle:version>0.5.2</sparkle:version>
+            <sparkle:shortVersionString>0.5.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>What's new in v0.5.2</h2>
+<h3>Agent integrations</h3>
+<ul>
+<li><strong>New: Pi integration.</strong> Drop-in extension for the <a href="https://pi.dev" rel="nofollow">Pi coding harness</a> that fires a notch notification when the agent finishes its work (<code class="notranslate">agent_end</code>). Debounces within 5 seconds so multi-turn prompts don't spam, and reads tmux <code class="notranslate">session:window</code> for disambiguated titles. Install from the menubar <strong>Integrations → Pi</strong>, or run <code class="notranslate">notchify-recipes install pi</code>.</li>
+</ul>
+<h3>CLI &amp; menus</h3>
+<ul>
+<li><strong>"Install CLI"</strong> now symlinks both <code class="notranslate">notchify</code> and <code class="notranslate">notchify-recipes</code> into <code class="notranslate">/usr/local/bin</code>.</li>
+<li><strong>Fixed:</strong> CLI install button works correctly when the daemon is run via <code class="notranslate">swift run</code> or <code class="notranslate">swift build</code> debug layouts.</li>
+<li><strong>Fixed:</strong> Installed-state detection now rejects dangling symlinks — stale broken symlinks no longer block re-install.</li>
+</ul>
+<h3>Internal</h3>
+<ul>
+<li>Pi recipe added to the Integrations menu alongside Claude Code and Codex.</li>
+<li>Pi recipe smoke tests added to <code class="notranslate">scripts/test-recipes.sh</code>.</li>
+</ul>
+<h3>Full changelog</h3>
+<p><a href="https://github.com/sespiros/notchify/compare/v0.5.1...v0.5.2">compare v0.5.1...v0.5.2</a></p>]]></description>
+            <enclosure url="https://github.com/sespiros/notchify/releases/download/v0.5.2/Notchify-0.5.2.dmg" sparkle:edSignature="fzwzTFewyrQY/lKLdFceOhLXQjKZonBoR8l1ePt0JaREwTBM1c9PBINz4WIpgWDVxn/od47aObPU1+0JfnMXCQ==" length="1894069" type="application/octet-stream"/>
+        </item>
     </channel>
 </rss>
