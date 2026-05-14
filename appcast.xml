@@ -96,5 +96,26 @@ xattr -d com.apple.quarantine /Applications/Notchify.app
 <p><a href="https://github.com/sespiros/notchify/compare/v0.5.2...v0.6.0">compare v0.5.2...v0.6.0</a></p>]]></description>
             <enclosure url="https://github.com/sespiros/notchify/releases/download/v0.6.0/Notchify-0.6.0.dmg" sparkle:edSignature="IrKyVnuZmNa4mOo3s+dy0MHGgpaDRzj0eBck9wWOSRF3jVXzDlgprzpX02V+EICRthVYOFph1yM/8l5+Ck26Aw==" length="1950371" type="application/octet-stream"/>
         </item>
+        <item>
+            <title>v0.6.1</title>
+            <pubDate>Thu, 14 May 2026 10:17:44 +0000</pubDate>
+            <sparkle:version>0.6.1</sparkle:version>
+            <sparkle:shortVersionString>0.6.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<p>v0.6.1 fixes the integration update path for the CLI option changes introduced in v0.6.0.</p>
+<h2>🐛 Bug fixes</h2>
+<ul>
+<li>Claude Code and Codex integrations now show <strong>update available</strong> after the v0.6.0 CLI option rename.</li>
+<li>The bundled Codex recipe now uses the new <code class="notranslate">--long</code> CLI options, so fresh installs and reinstalls work correctly with v0.6.x.</li>
+</ul>
+<h2>Updating</h2>
+<p>If you are already on v0.6.0, click <strong>Check for Updates…</strong> under the Notchify menubar icon — Sparkle picks up v0.6.1 automatically. Then open <strong>Integrations</strong> and update Claude Code / Codex if prompted.</p>
+<h2>Fresh install</h2>
+<p>Download <code class="notranslate">Notchify-0.6.1.dmg</code>, drag to Applications, then:</p>
+<div class="highlight highlight-source-shell"><pre class="notranslate">xattr -d com.apple.quarantine /Applications/Notchify.app</pre></div>
+<h2>Full changelog</h2>
+<p><a href="https://github.com/sespiros/notchify/compare/v0.6.0...v0.6.1">compare v0.6.0...v0.6.1</a></p>]]></description>
+            <enclosure url="https://github.com/sespiros/notchify/releases/download/v0.6.1/Notchify-0.6.1.dmg" sparkle:edSignature="uLgUQ6czv5op6A2L+5Enxk+70Zngd0EsWnSGcJlHIN6H909+LOA3i8E4+/D4Udh8ikqt61m1cghH5+hdzdD3DA==" length="1951815" type="application/octet-stream"/>
+        </item>
     </channel>
 </rss>
