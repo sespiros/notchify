@@ -72,13 +72,15 @@ xattr -d com.apple.quarantine /Applications/Notchify.app
             <sparkle:version>0.6.0</sparkle:version>
             <sparkle:shortVersionString>0.6.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<h2>New Features</h2>
-<ul>
-<li>Focus-muted notification queue. Configure it in Focus Behavior: Ignore Focus Modes, Mute for DND Only, or Mute for Any Focus Mode.</li>
-<li>Nicer CLI options: standard long options like <code class="notranslate">--timeout</code>/<code class="notranslate">--group</code>, plus shorthands like <code class="notranslate">-t</code>/<code class="notranslate">-g</code>/<code class="notranslate">-f</code>.</li>
-<li><code class="notranslate">notchify --daemon quit</code> exits the daemon when the menubar icon is inaccessible.</li>
-</ul>
-<h2>Fixes</h2>
+            <description><![CDATA[<p>v0.6.0 adds a Focus-muted notification queue and cleaner CLI controls. Focus behavior is configurable from the menubar, and the CLI now follows the standard <code class="notranslate">--long</code> / <code class="notranslate">-x</code> option shape.</p>
+<h2>✨ New features</h2>
+<h3>🧘 Focus-muted notification queue</h3>
+<p>When Notchify is configured to mute during Focus, muted notifications are queued in the notch instead of disappearing. Configure this from <strong>Focus Behavior</strong> in the menubar: <strong>Ignore Focus Modes</strong>, <strong>Mute for Do Not Disturb Only</strong>, or <strong>Mute for Any Focus Mode</strong>.</p>
+<h3>⌨️ Nicer CLI options</h3>
+<p>The CLI now supports standard long options like <code class="notranslate">--timeout</code> and <code class="notranslate">--group</code>, plus shorthands like <code class="notranslate">-t</code>, <code class="notranslate">-g</code>, and <code class="notranslate">-f</code>.</p>
+<h3>🚪 Daemon quit command</h3>
+<p><code class="notranslate">notchify --daemon quit</code> exits the running daemon when the menubar icon is inaccessible.</p>
+<h2>🐛 Bug fixes</h2>
 <ul>
 <li>Single notifications no longer scroll or shift awkwardly.</li>
 <li>Chip hover switching is smoother, especially when moving quickly between adjacent chips.</li>
@@ -86,11 +88,12 @@ xattr -d com.apple.quarantine /Applications/Notchify.app
 <li>Restarting the daemon no longer leaves the notification socket unreachable.</li>
 </ul>
 <h2>Updating</h2>
-<p>If you are already on v0.5.2, use Check for Updates... from the Notchify menubar icon.</p>
-<h2>Fresh Install</h2>
-<p>Download <code class="notranslate">Notchify-0.6.0.dmg</code>, drag to Applications, then run <code class="notranslate">xattr -d com.apple.quarantine /Applications/Notchify.app</code>.</p>
-<h2>Full Changelog</h2>
-<p><a class="commit-link" href="https://github.com/sespiros/notchify/compare/v0.5.2...v0.6.0">sespiros/notchify@<tt>v0.5.2...v0.6.0</tt></a></p>]]></description>
+<p>If you are already on v0.5.2, click <strong>Check for Updates…</strong> under the Notchify menubar icon — Sparkle picks up v0.6.0 automatically.</p>
+<h2>Fresh install</h2>
+<p>Download <code class="notranslate">Notchify-0.6.0.dmg</code>, drag to Applications, then:</p>
+<div class="highlight highlight-source-shell"><pre class="notranslate">xattr -d com.apple.quarantine /Applications/Notchify.app</pre></div>
+<h2>Full changelog</h2>
+<p><a href="https://github.com/sespiros/notchify/compare/v0.5.2...v0.6.0">compare v0.5.2...v0.6.0</a></p>]]></description>
             <enclosure url="https://github.com/sespiros/notchify/releases/download/v0.6.0/Notchify-0.6.0.dmg" sparkle:edSignature="IrKyVnuZmNa4mOo3s+dy0MHGgpaDRzj0eBck9wWOSRF3jVXzDlgprzpX02V+EICRthVYOFph1yM/8l5+Ck26Aw==" length="1950371" type="application/octet-stream"/>
         </item>
     </channel>
