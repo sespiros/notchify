@@ -49,16 +49,6 @@ cd gh-pages
 git config user.name  "github-actions[bot]"
 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-# Idempotency: if appcast already lists this version, do nothing. Lets
-# the workflow be re-run safely (e.g. for an editorial change to the
-# release body, where we'd just want to refresh the description).
-if grep -q "<sparkle:version>${VERSION}</sparkle:version>" appcast.xml 2>/dev/null; then
-    echo "appcast already contains ${VERSION}; nothing to do"
-    exit 0
-fi
-
-PUBDATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
-
 # Sparkle renders <description> as HTML, not Markdown, so the raw
 # release body collapses headers and bullets into one run-on line.
 # Push the body through GitHub's /markdown API (GFM mode) to get the
@@ -67,6 +57,30 @@ PUBDATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
 HTML_BODY=$(jq -n --arg text "$RELEASE_BODY" '{text: $text, mode: "gfm"}' \
     | gh api -X POST /markdown --input -)
 SAFE_BODY=$(printf '%s' "$HTML_BODY" | sed 's/]]>/]]]]><![CDATA[>/g')
+
+# Idempotency: if appcast already lists this version, refresh the
+# description from the current release body instead of appending a
+# duplicate item. This keeps Sparkle's update dialog in sync with
+# editorial fixes to GitHub release notes.
+if grep -q "<sparkle:version>${VERSION}</sparkle:version>" appcast.xml 2>/dev/null; then
+    echo "appcast already contains ${VERSION}; refreshing description"
+    VERSION="$VERSION" SAFE_BODY="$SAFE_BODY" perl -0pi -e '
+        my $version = $ENV{"VERSION"};
+        my $body = $ENV{"SAFE_BODY"};
+        my $matched = s{(<item>(?:(?!</item>).)*?<sparkle:version>\Q$version\E</sparkle:version>(?:(?!</item>).)*?<description><!\[CDATA\[).*?(\]\]></description>)}{$1$body$2}s;
+        die "could not find appcast item for $version\n" unless $matched;
+    ' appcast.xml
+    if git diff --quiet -- appcast.xml; then
+        echo "appcast description already current"
+        exit 0
+    fi
+    git add appcast.xml
+    git commit -m "appcast: refresh ${TAG}"
+    git push origin gh-pages
+    exit 0
+fi
+
+PUBDATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
 
 NEW_ITEM=$(cat <<EOF
         <item>
