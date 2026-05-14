@@ -60,6 +60,7 @@ final class NotchController {
     /// Low-frequency poll for macOS Focus / DND so the notch can
     /// show a muted indicator even before a notification arrives.
     private var focusStatusTimer: Timer?
+    private var focusPolicyObserver: NSObjectProtocol?
 
     /// Whether SwiftUI currently has painted pill content. The panel
     /// itself stays at a stable maximum size for the active notch so
@@ -197,7 +198,7 @@ final class NotchController {
         // it as a silent persistent row. The system muted chip keeps
         // the reason visible and can reveal the suppressed rows while
         // hovered.
-        if Focus.doNotDisturbActive() {
+        if Focus.shouldMute() {
             recordFocusSuppressed(message)
             return
         }
@@ -350,6 +351,13 @@ final class NotchController {
 
     private func startFocusStatusTimer() {
         updateFocusMutedState()
+        focusPolicyObserver = NotificationCenter.default.addObserver(
+            forName: FocusPolicy.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.updateFocusMutedState() }
+        }
         let timer = Timer(timeInterval: 2.0, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.updateFocusMutedState() }
         }
@@ -359,7 +367,7 @@ final class NotchController {
     }
 
     private func updateFocusMutedState() {
-        let active = Focus.doNotDisturbActive()
+        let active = Focus.shouldMute()
         guard model.focusMuted != active else { return }
         model.focusMuted = active
         if !active {

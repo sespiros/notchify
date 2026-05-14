@@ -11,6 +11,7 @@ final class StatusBarController: NSObject {
     private let installCLIItem = NSMenuItem(
         title: "Install CLI in /usr/local/bin", action: nil, keyEquivalent: ""
     )
+    private let focusBehaviorMenu = NSMenu()
     private let integrations = IntegrationsMenu()
     private let updater: Updater?
     private var badgeView: NSView?
@@ -78,6 +79,20 @@ final class StatusBarController: NSObject {
         installCLIItem.target = self
         menu.addItem(installCLIItem)
 
+        let focusBehaviorItem = NSMenuItem(title: "Focus Behavior", action: nil, keyEquivalent: "")
+        focusBehaviorItem.submenu = focusBehaviorMenu
+        for policy in FocusPolicy.allCases {
+            let item = NSMenuItem(
+                title: policy.title,
+                action: #selector(setFocusPolicy(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = policy.rawValue
+            focusBehaviorMenu.addItem(item)
+        }
+        menu.addItem(focusBehaviorItem)
+
         menu.addItem(integrations.rootItem)
 
         menu.addItem(.separator())
@@ -102,6 +117,7 @@ final class StatusBarController: NSObject {
 
         refreshLaunchAtLoginState()
         refreshCLIState()
+        refreshFocusPolicyState()
     }
 
     @objc private func about() {
@@ -164,6 +180,22 @@ final class StatusBarController: NSObject {
             ? "CLI installed at \(prefix!)"
             : "Install CLI in /usr/local/bin"
         installCLIItem.action = installed ? nil : #selector(installCLI)
+    }
+
+    @objc private func setFocusPolicy(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let policy = FocusPolicy(rawValue: raw) else { return }
+        FocusPolicy.current = policy
+        refreshFocusPolicyState()
+    }
+
+    private func refreshFocusPolicyState() {
+        let current = FocusPolicy.current
+        for item in focusBehaviorMenu.items {
+            guard let raw = item.representedObject as? String,
+                  let policy = FocusPolicy(rawValue: raw) else { continue }
+            item.state = policy == current ? .on : .off
+        }
     }
 
     // Look for both notchify and notchify-recipes in common install
