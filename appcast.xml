@@ -66,5 +66,32 @@ xattr -d com.apple.quarantine /Applications/Notchify.app
 <p><a href="https://github.com/sespiros/notchify/compare/v0.5.1...v0.5.2">compare v0.5.1...v0.5.2</a></p>]]></description>
             <enclosure url="https://github.com/sespiros/notchify/releases/download/v0.5.2/Notchify-0.5.2.dmg" sparkle:edSignature="fzwzTFewyrQY/lKLdFceOhLXQjKZonBoR8l1ePt0JaREwTBM1c9PBINz4WIpgWDVxn/od47aObPU1+0JfnMXCQ==" length="1894069" type="application/octet-stream"/>
         </item>
+        <item>
+            <title>v0.6.0</title>
+            <pubDate>Thu, 14 May 2026 08:45:31 +0000</pubDate>
+            <sparkle:version>0.6.0</sparkle:version>
+            <sparkle:shortVersionString>0.6.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>New Features</h2>
+<ul>
+<li>Focus-muted notification queue. Configure it in Focus Behavior: Ignore Focus Modes, Mute for DND Only, or Mute for Any Focus Mode.</li>
+<li>Nicer CLI options: standard long options like <code class="notranslate">--timeout</code>/<code class="notranslate">--group</code>, plus shorthands like <code class="notranslate">-t</code>/<code class="notranslate">-g</code>/<code class="notranslate">-f</code>.</li>
+<li><code class="notranslate">notchify --daemon quit</code> exits the daemon when the menubar icon is inaccessible.</li>
+</ul>
+<h2>Fixes</h2>
+<ul>
+<li>Single notifications no longer scroll or shift awkwardly.</li>
+<li>Chip hover switching is smoother, especially when moving quickly between adjacent chips.</li>
+<li>Muted notifications can be clicked to dismiss or run actions after they are revealed.</li>
+<li>Restarting the daemon no longer leaves the notification socket unreachable.</li>
+</ul>
+<h2>Updating</h2>
+<p>If you are already on v0.5.2, use Check for Updates... from the Notchify menubar icon.</p>
+<h2>Fresh Install</h2>
+<p>Download <code class="notranslate">Notchify-0.6.0.dmg</code>, drag to Applications, then run <code class="notranslate">xattr -d com.apple.quarantine /Applications/Notchify.app</code>.</p>
+<h2>Full Changelog</h2>
+<p><a class="commit-link" href="https://github.com/sespiros/notchify/compare/v0.5.2...v0.6.0">sespiros/notchify@<tt>v0.5.2...v0.6.0</tt></a></p>]]></description>
+            <enclosure url="https://github.com/sespiros/notchify/releases/download/v0.6.0/Notchify-0.6.0.dmg" sparkle:edSignature="IrKyVnuZmNa4mOo3s+dy0MHGgpaDRzj0eBck9wWOSRF3jVXzDlgprzpX02V+EICRthVYOFph1yM/8l5+Ck26Aw==" length="1950371" type="application/octet-stream"/>
+        </item>
     </channel>
 </rss>
