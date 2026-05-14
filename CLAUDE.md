@@ -127,4 +127,4 @@ are queued in `arrivals` but do *not* trigger phase c. Once the user
 disengages (cursor leaves pill), `handleEngagementChange` resumes
 `startNext` and queued notifications play through their normal
 lifecycle. This avoids interrupting the user mid-read while still
-honoring `-timeout` semantics.
+honoring `--timeout` semantics.

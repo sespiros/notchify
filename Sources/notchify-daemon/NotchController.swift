@@ -53,7 +53,7 @@ final class NotchController {
     /// can finish its slide-up before `orderOut` fires. Tracked so a
     /// fresh arrival can cancel it mid-teardown.
     private var teardownTask: Task<Void, Never>?
-    /// 1 Hz poll that auto-dismisses `-focus` notifications once the
+    /// 1 Hz poll that auto-dismisses `--focus` notifications once the
     /// user visits their source. Runs only while there are
     /// dismissKey-bearing rows in the stacks.
     private var focusTimer: Timer?
@@ -187,7 +187,7 @@ final class NotchController {
 
     func present(_ message: Message) {
         // If the user is already looking at the source terminal/pane,
-        // don't flash a `-focus` notification only to retract it on
+        // don't flash a `--focus` notification only to retract it on
         // the next 1 Hz focus poll. Suppress it at ingress instead.
         if shouldSuppressForCurrentFocus(message) {
             return
@@ -305,9 +305,9 @@ final class NotchController {
         // - Customized: notifications with the same icon+color
         //   fingerprint share a chip; different fingerprints get
         //   different chips. So firing the same `notchify foo
-        //   -icon X -color Y` twice ends up in one chip, but a
+        //   --icon X --color Y` twice ends up in one chip, but a
         //   warning (red exclamation) and a success (green check)
-        //   stay separate without forcing the user to add `-group`.
+        //   stay separate without forcing the user to add `--group`.
         let icon = message.icon ?? ""
         let color = message.color ?? ""
         if icon.isEmpty && color.isEmpty {

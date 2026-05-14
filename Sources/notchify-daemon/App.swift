@@ -31,9 +31,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         do {
-            try server.start { [weak self] msg in
-                Task { @MainActor in self?.controller.present(msg) }
-            }
+            try server.start(
+                { [weak self] msg in
+                    Task { @MainActor in self?.controller.present(msg) }
+                },
+                onQuit: {
+                    NSApp.terminate(nil)
+                }
+            )
             NSLog("notchify-daemon: listening on \(server.path)")
         } catch {
             NSLog("notchify-daemon: failed to start: \(error)")

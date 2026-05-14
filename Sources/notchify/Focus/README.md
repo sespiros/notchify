@@ -1,6 +1,6 @@
 # Focus providers
 
-`-focus` builds its click-to-focus shell action by composing small
+`--focus` builds its click-to-focus shell action by composing small
 "providers".
 Each provider answers one question:
 "given the current context (env, tty, detected terminal app), what's
@@ -72,7 +72,7 @@ Fields:
 - `env` — the calling environment.
 - `tmuxBinary` — absolute path to tmux, resolved here so the action
   string runs cleanly under notchify-daemon's reduced launchd PATH.
-  Nil if tmux isn't on PATH at -focus time.
+  Nil if tmux isn't on PATH at --focus time.
 - `callerTTY` — the caller's controlling tty.
   Inside tmux this is the *client* tty (the terminal-side pty), not
   the pane's tty.
@@ -88,7 +88,7 @@ either compute it lazily inside your `action()` or extend
 
 The action string runs under `sh -c` from notchify-daemon, which
 inherits launchd's minimal PATH (`/usr/bin:/bin:/usr/sbin:/sbin`).
-Always resolve binaries to absolute paths at -focus time, where the
+Always resolve binaries to absolute paths at --focus time, where the
 caller still has a real PATH; don't rely on the daemon to find them.
 
 Multiple providers' contributions are joined with `; `, so each piece
@@ -102,7 +102,7 @@ Build and run from within your tmux pane:
 
 ```sh
 swift build
-NOTCHIFY_DEBUG=1 .build/debug/notchify "t" "x" -focus
+NOTCHIFY_DEBUG=1 .build/debug/notchify "t" "x" --focus
 ```
 
 (Re-add a debug stderr write in `main.swift` when iterating; not

@@ -154,18 +154,18 @@ case "$state" in
         # Run synchronously: backgrounding (with &) reparents notchify
         # to launchd as soon as the hook script exits, which makes
         # getppid()-based ancestor walking fail to find the calling
-        # terminal app, breaking -focus's click-action and dismiss-key
+        # terminal app, breaking --focus's click-action and dismiss-key
         # detection. notchify is sub-second; the hook can wait.
-        if ! notchify "$title" "$body" -sound info \
-                      -icon "$HOME/.config/claude/icons/blocked.png" \
-                      -group "claude:blocked" -focus; then
+        if ! notchify "$title" "$body" --sound info \
+                      --icon "$HOME/.config/claude/icons/blocked.png" \
+                      --group "claude:blocked" --focus; then
             exit 0
         fi
         ;;
     idle)
-        if ! notchify "$title" "done" -sound ready \
-                      -icon "$HOME/.config/claude/icons/done.png" \
-                      -group "claude:done" -focus; then
+        if ! notchify "$title" "done" --sound ready \
+                      --icon "$HOME/.config/claude/icons/done.png" \
+                      --group "claude:done" --focus; then
             exit 0
         fi
         ;;

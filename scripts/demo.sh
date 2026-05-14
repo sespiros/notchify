@@ -30,16 +30,16 @@ sleep 3
 echo "[demo] colorful one-shot notifications"
 
 "$N" "Build complete" "your project has been built" \
-     -sound success -icon checkmark.circle.fill -color green
+     --sound success --icon checkmark.circle.fill --color green
 sleep 6
 
 "$N" "Heads up" "deploy needs your input" \
-     -sound warning -icon exclamationmark.triangle.fill -color orange
+     --sound warning --icon exclamationmark.triangle.fill --color orange
 sleep 6
 
 "$N" "Open the link" "click the body to launch in browser" \
-     -sound info -icon link.circle.fill -color blue \
-     -action https://example.com
+     --sound info --icon link.circle.fill --color blue \
+     --action https://example.com
 sleep 6
 
 # --- Named-group stacking ----------------------------------------
@@ -47,11 +47,11 @@ sleep 6
 echo "[demo] grouped notifications coalesce under one chip"
 
 "$N" "Lint clean" "no warnings" \
-     -group claude -icon sparkles -color blue -timeout 0
+     --group claude --icon sparkles --color blue --timeout 0
 sleep 2
-"$N" "Tests green" "47 passing" -group claude -timeout 0
+"$N" "Tests green" "47 passing" --group claude --timeout 0
 sleep 2
-"$N" "Build done" "ready to commit" -group claude -timeout 0
+"$N" "Build done" "ready to commit" --group claude --timeout 0
 sleep 6
 
 # --- Multi-stack: hover any chip to expand its list --------------
@@ -59,12 +59,12 @@ sleep 6
 echo "[demo] multiple stacks coexist; hover a chip to expand it"
 
 "$N" "Compiling" "make clean && make" \
-     -group make -icon hammer.fill -color orange -timeout 0
+     --group make --icon hammer.fill --color orange --timeout 0
 sleep 2
-"$N" "Linker error" "undefined symbol _foo" -group make -timeout 0
+"$N" "Linker error" "undefined symbol _foo" --group make --timeout 0
 sleep 2
 "$N" "Deploying" "rolling out v1.2.3" \
-     -group deploy -icon paperplane.fill -color purple -timeout 0
+     --group deploy --icon paperplane.fill --color purple --timeout 0
 sleep 8
 
 echo "demo done."

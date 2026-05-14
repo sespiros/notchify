@@ -15,9 +15,9 @@
 ## Use
 
 ```sh
-notchify "Done" "build succeeded"    -sound ready
-notchify "Heads up" "deploy needs input" -sound warning -symbol exclamationmark.triangle.fill -color orange
-notchify "Open" "tap me"             -action https://example.com
+notchify "Done" "build succeeded"    --sound ready
+notchify "Heads up" "deploy needs input" --sound warning --icon exclamationmark.triangle.fill --color orange
+notchify "Open" "tap me"             --action https://example.com
 notchify "Title only"                                  # body is optional
 ```
 
@@ -26,15 +26,15 @@ Positional args are `<title> [body]`, mirroring Linux's `notify-send`.
 
 | flag | examples / default |
 |------|--------------------|
-| `-icon <name\|path>` | SF Symbol name (`bell.fill`, `checkmark.circle`) or image file path (PNG/JPEG, animated GIF/WebP). Default: `bell.fill` |
-| `-color <name>` | Tint for SF Symbol icons. `orange`/`red`/`yellow`/`green`/`blue`/`purple`/`pink`/`white`/`gray`. Ignored for image-file icons. Default: `white` |
-| `-sound <name>` | `ready`/`warning`/`info`/`success`/`error`, or any name from `/System/Library/Sounds/` (e.g. `Glass`, `Ping`). Default: silent |
-| `-action <url\|cmd>` | URL opened or shell command run on tap. Default: click only dismisses |
-| `-focus` | Mutually exclusive with `-action`. Raises the source terminal app and (in tmux) jumps to the originating pane. Implies `-timeout 0` |
-| `-timeout <secs>` | Auto-dismiss seconds. `0` = persistent (sits in chip until clicked). Default: `5` |
-| `-group <name>` | Stack notifications under a named chip. Subsequent `-group <same>` calls collapse into one chip with a count badge. Chip's icon/color are taken from the first notification in that group |
+| `-i, --icon <name\|path>` | SF Symbol name (`bell.fill`, `checkmark.circle`) or image file path (PNG/JPEG, animated GIF/WebP). Default: `bell.fill` |
+| `-c, --color <name>` | Tint for SF Symbol icons. `orange`/`red`/`yellow`/`green`/`blue`/`purple`/`pink`/`white`/`gray`. Ignored for image-file icons. Default: `white` |
+| `-s, --sound <name>` | `ready`/`warning`/`info`/`success`/`error`, or any name from `/System/Library/Sounds/` (e.g. `Glass`, `Ping`). Default: silent |
+| `-a, --action <url\|cmd>` | URL opened or shell command run on tap. Default: click only dismisses |
+| `-f, --focus` | Mutually exclusive with `--action`. Raises the source terminal app and (in tmux) jumps to the originating pane. Implies `--timeout 0` |
+| `-t, --timeout <secs>` | Auto-dismiss seconds. `0` = persistent (sits in chip until clicked). Default: `5` |
+| `-g, --group <name>` | Stack notifications under a named chip. Subsequent `--group <same>` calls collapse into one chip with a count badge. Chip's icon/color are taken from the first notification in that group |
 
-`-focus` auto-detects the terminal app
+`--focus` auto-detects the terminal app
 (Ghostty, iTerm, Terminal, WezTerm, kitty, ...).
 Set `NOTCHIFY_TERMINAL_BUNDLE` to override the detection
 (e.g. `NOTCHIFY_TERMINAL_BUNDLE=com.github.wez.wezterm`).
@@ -78,7 +78,7 @@ See [BUILDING.md](BUILDING.md).
 
 ## Behavior
 
-- Click the rectangle: runs `-action` (if any) and retracts.
+- Click the rectangle: runs `--action` (if any) and retracts.
 - Hover the body: pauses the auto-dismiss timer until the cursor moves away.
 - Hover any chip on the shelf: drops down its full notification list.
   Click an individual row to dismiss it; click the chip itself to dismiss
@@ -91,7 +91,7 @@ See [BUILDING.md](BUILDING.md).
   Older groups beyond that are tracked in the data model but not shown.
 - Inside a stack, up to ~3.5 rows are visible at once and the rest
   scroll, with a soft top/bottom fade indicating overflow.
-- `-focus` notifications are auto-dismissed once the user visits the
+- `--focus` notifications are auto-dismissed once the user visits the
   source: the daemon polls the frontmost app (and, when captured at
   fire time, the active tmux pane) once a second and removes any
   rows whose dismiss-key matches. Already on the source at fire

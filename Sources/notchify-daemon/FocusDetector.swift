@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 
 /// Resolves "what is the user currently looking at?" so the daemon
-/// can auto-dismiss `-focus` notifications when the user visits the
+/// can auto-dismiss `--focus` notifications when the user visits the
 /// source.
 ///
 /// This file is the orchestrator and the home of the low-level OS

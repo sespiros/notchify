@@ -86,7 +86,7 @@ Exits non-zero if anything has drifted.
 
 ## Click-through behavior
 
-Each recipe fires popups with `-focus` (persistent, click-to-jump,
+Each recipe fires popups with `--focus` (persistent, click-to-jump,
 auto-dismiss when you return to the source terminal). The recipe
 runs `notchify` synchronously so the CLI can correctly resolve the
 calling terminal's bundle id; backgrounding with `&` would orphan

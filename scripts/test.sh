@@ -36,14 +36,14 @@ Sections (run one at a time):
   basic       3 colored singletons with sounds and icons
   actions     URL action and shell action (click the body)
   variants    title-only, short timeout, plain ungrouped coalescing
-  persistent  -timeout 0 holds the chip after retract
+  persistent  --timeout 0 holds the chip after retract
   stacks      named-group coalescing (claude, make)
   overflow    4 groups, leftmost renders as 40% partial chip
   hover       >3.5 rows, scroll + fade gradients (hover the chip)
   queue       hover-while-arriving engagement gate
   bodies      one-line, two-line wrap, ellipsis tail
   edge        race conditions: mid-slide, mid-retract, click-dismiss
-  focus       -focus drop-if-focused and focus-on-return dismiss
+  focus       --focus drop-if-focused and focus-on-return dismiss
   image       custom file-path icon (PNG + animated webp)
   all         run every section sequentially (mostly not unattended)
 EOF
@@ -74,15 +74,15 @@ if run_section basic; then
     echo "[basic] colored singletons with sounds and icons"
 
     "$N" "Build complete" "your project has been built" \
-         -sound success -icon checkmark.circle.fill -color green
+         --sound success --icon checkmark.circle.fill --color green
     sleep 6
 
     "$N" "Heads up" "deploy needs your input" \
-         -sound warning -icon exclamationmark.triangle.fill -color orange
+         --sound warning --icon exclamationmark.triangle.fill --color orange
     sleep 6
 
     "$N" "Ready" "all systems go" \
-         -sound ready -icon asterisk.circle.fill -color white
+         --sound ready --icon asterisk.circle.fill --color white
     sleep 6
 fi
 
@@ -92,13 +92,13 @@ if run_section actions; then
     echo "[actions] click the body to trigger the action"
 
     "$N" "Open the link" "tap to launch in browser" \
-         -sound info -icon link.circle.fill -color blue \
-         -action https://example.com
+         --sound info --icon link.circle.fill --color blue \
+         --action https://example.com
     sleep 6
 
     "$N" "Run shell" "click to write /tmp/notchify-demo" \
-         -icon terminal.fill -color purple \
-         -action 'echo "clicked at $(date)" >> /tmp/notchify-demo'
+         --icon terminal.fill --color purple \
+         --action 'echo "clicked at $(date)" >> /tmp/notchify-demo'
     sleep 6
 fi
 
@@ -108,7 +108,7 @@ if run_section variants; then
     echo "[variants] empty body, short timeout, default-chip coalescing"
 
     # Short timeout — quick dismiss.
-    "$N" "Quick" "0.8s timeout" -timeout 0.8
+    "$N" "Quick" "0.8s timeout" --timeout 0.8
     sleep 4
 
     # Two ungrouped (no icon/color) sent in quick succession,
@@ -127,20 +127,20 @@ if run_section variants; then
     # sliding in after the first retracts. Two chip slots end up
     # side by side on the shelf.
     "$N" "Group A first" "this one shows first" \
-         -group var-a -icon a.circle.fill -color blue
+         --group var-a --icon a.circle.fill --color blue
     sleep 1
     "$N" "Group B first" "queues until A is done" \
-         -group var-b -icon b.circle.fill -color orange
+         --group var-b --icon b.circle.fill --color orange
     sleep 10
 fi
 
 # --- Persistent (stays as chip until dismissed) ------------------
 
 if run_section persistent; then
-    echo "[persistent] -timeout 0 holds the chip after retract"
+    echo "[persistent] --timeout 0 holds the chip after retract"
 
     "$N" "Migration paused" "click chip to dismiss" \
-         -icon pause.circle.fill -color yellow -timeout 0
+         --icon pause.circle.fill --color yellow --timeout 0
     sleep 6
 fi
 
@@ -150,17 +150,17 @@ if run_section stacks; then
     echo "[stacks] grouped notifications coalesce under one chip"
 
     "$N" "Lint clean" "no warnings" \
-         -group claude -icon sparkles -color blue -timeout 0
+         --group claude --icon sparkles --color blue --timeout 0
     sleep 2
-    "$N" "Tests green" "47 passing" -group claude -timeout 0
+    "$N" "Tests green" "47 passing" --group claude --timeout 0
     sleep 2
-    "$N" "Build done" "ready to commit" -group claude -timeout 0
+    "$N" "Build done" "ready to commit" --group claude --timeout 0
     sleep 6
 
     "$N" "Compiling" "make clean && make" \
-         -group make -icon hammer.fill -color orange -timeout 0
+         --group make --icon hammer.fill --color orange --timeout 0
     sleep 2
-    "$N" "Linker error" "undefined symbol _foo" -group make -timeout 0
+    "$N" "Linker error" "undefined symbol _foo" --group make --timeout 0
     sleep 6
 fi
 
@@ -171,33 +171,33 @@ if run_section overflow; then
     echo "           to exercise the chip-shelf auto-scroll across the"
     echo "           full range (oldest leftmost ↔ newest rightmost)."
 
-    "$N" "G1 first" -group g1 -icon 1.circle.fill -color red     -timeout 0
+    "$N" "G1 first" --group g1 --icon 1.circle.fill --color red     --timeout 0
     sleep 1
-    "$N" "G2 first" -group g2 -icon 2.circle.fill -color orange  -timeout 0
+    "$N" "G2 first" --group g2 --icon 2.circle.fill --color orange  --timeout 0
     sleep 1
-    "$N" "G3 first" -group g3 -icon 3.circle.fill -color yellow  -timeout 0
+    "$N" "G3 first" --group g3 --icon 3.circle.fill --color yellow  --timeout 0
     sleep 1
-    "$N" "G4 first" -group g4 -icon 4.circle.fill -color green   -timeout 0
+    "$N" "G4 first" --group g4 --icon 4.circle.fill --color green   --timeout 0
     sleep 1
-    "$N" "G5 first" -group g5 -icon 5.circle.fill -color blue    -timeout 0
+    "$N" "G5 first" --group g5 --icon 5.circle.fill --color blue    --timeout 0
     sleep 1
-    "$N" "G6 first" -group g6 -icon 6.circle.fill -color purple  -timeout 0
+    "$N" "G6 first" --group g6 --icon 6.circle.fill --color purple  --timeout 0
     sleep 1
-    "$N" "G7 first" -group g7 -icon 7.circle.fill -color pink    -timeout 0
+    "$N" "G7 first" --group g7 --icon 7.circle.fill --color pink    --timeout 0
     sleep 1
-    "$N" "G8 first" -group g8 -icon 8.circle.fill -color white   -timeout 0
+    "$N" "G8 first" --group g8 --icon 8.circle.fill --color white   --timeout 0
     sleep 6
 
     # Zig-zag second arrivals: oldest, newest, near-oldest, near-newest.
     # Each should auto-scroll the chip shelf so the active chip lands
     # in view, then settle back to whatever's active next.
-    "$N" "G1 second" "scrolls all the way left" -group g1 -timeout 0
+    "$N" "G1 second" "scrolls all the way left" --group g1 --timeout 0
     sleep 6
-    "$N" "G8 second" "scrolls all the way right" -group g8 -timeout 0
+    "$N" "G8 second" "scrolls all the way right" --group g8 --timeout 0
     sleep 6
-    "$N" "G2 second" "scrolls one in from the left" -group g2 -timeout 0
+    "$N" "G2 second" "scrolls one in from the left" --group g2 --timeout 0
     sleep 6
-    "$N" "G7 second" "scrolls one in from the right" -group g7 -timeout 0
+    "$N" "G7 second" "scrolls one in from the right" --group g7 --timeout 0
     sleep 6
 fi
 
@@ -209,7 +209,7 @@ if run_section hover; then
 
     for i in 1 2 3 4 5 6 7 8 9; do
         "$N" "Hover row $i" "scroll inside the list to see fades" \
-             -group hover -icon list.bullet -color blue -timeout 0
+             --group hover --icon list.bullet --color blue --timeout 0
         sleep 0.4
     done
 
@@ -224,13 +224,13 @@ if run_section queue; then
     echo "        silently; release the cursor and they play out."
 
     "$N" "Engagement test" "now hover the pill — keep cursor on it" \
-         -icon hand.point.up.fill -color purple -timeout 0
+         --icon hand.point.up.fill --color purple --timeout 0
     sleep 4
 
     # These four should queue while the cursor is hovering.
     for i in 1 2 3 4; do
         "$N" "Queued $i" "should not slide while you hover" \
-             -icon $i.circle.fill -color blue
+             --icon $i.circle.fill --color blue
         sleep 0.5
     done
 
@@ -260,31 +260,31 @@ if run_section edge; then
 
     # Two notifications fired with no gap → second one queues during
     # the first's slide-in (midSlide path).
-    "$N" "Race A" "first of a fast pair" -icon a.circle.fill -color red
+    "$N" "Race A" "first of a fast pair" --icon a.circle.fill --color red
     "$N" "Race B" "second arrives mid-slide-in"
     sleep 12
 
     # Send into the same group while the in-flight is mid-retract:
     # the retraction should cancel cleanly and the new one slide in.
     "$N" "Mid-retract A" "watch retract start, then a B arrives" \
-         -group race -icon clock.fill -color yellow -timeout 2
+         --group race --icon clock.fill --color yellow --timeout 2
     sleep 2.5
     "$N" "Mid-retract B" "should not collide with A's teardown" \
-         -group race
+         --group race
     sleep 8
 
     # Click-to-dismiss the in-flight before its dwell finishes.
     # (Manual: actually click on the body when it appears.)
     echo "[edge] CLICK the next notification's body before the timer"
     "$N" "Click me" "click the body now to dismiss early" \
-         -icon hand.tap.fill -color pink
+         --icon hand.tap.fill --color pink
     sleep 8
 fi
 
 # --- Focus auto-dismiss ------------------------------------------
 
 if run_section focus; then
-    echo "[focus] -focus polls 1Hz; auto-dismisses when source"
+    echo "[focus] --focus polls 1Hz; auto-dismisses when source"
     echo "        becomes focused. Click also runs the focus action."
 
     echo "[focus] (1) auto-dismiss test: switch away within 3 seconds,"
@@ -292,7 +292,7 @@ if run_section focus; then
     echo "        the chip dismiss itself."
     sleep 3
     "$N" "Visit me" "switch back to the source pane to dismiss me" \
-         -focus -icon arrow.uturn.left.circle.fill -color blue
+         --focus --icon arrow.uturn.left.circle.fill --color blue
     sleep 15
 
     echo "[focus] (2) click-to-focus test: switch away within 3 seconds,"
@@ -301,7 +301,7 @@ if run_section focus; then
     echo "        pane if you ran this from inside tmux)."
     sleep 3
     "$N" "Click to come back" "click me to focus the source" \
-         -focus -icon hand.tap.fill -color pink
+         --focus --icon hand.tap.fill --color pink
     sleep 15
 fi
 
@@ -311,14 +311,14 @@ if run_section image; then
     echo "[image] custom file-path icon (PNG static + animated webp)"
 
     "$N" "Static PNG icon" "uses Resources/AppIcon.png" \
-         -group image-png -icon "$SCRIPT_DIR/../Resources/AppIcon.png" -timeout 0
+         --group image-png --icon "$SCRIPT_DIR/../Resources/AppIcon.png" --timeout 0
     sleep 6
 
     # Animated webp (rickroll). Tests whether the daemon decodes
     # frames or just falls back to a still — useful as a quick
     # check that animated chip icons render at all.
     "$N" "Animated webp" "ai.webp from giphy" \
-         -group image-webp -icon "$SCRIPT_DIR/test-assets/ai.webp" -timeout 0
+         --group image-webp --icon "$SCRIPT_DIR/test-assets/ai.webp" --timeout 0
     sleep 8
 fi
 
@@ -357,7 +357,7 @@ echo "test done."
 #   - Chip slot announces as button with "Show <stackID> notifications"
 #     label.
 #   - In-flight body announces as "Dismiss notification" or "Open
-#     notification" depending on -action.
+#     notification" depending on --action.
 #   - Row in hover list announces title appropriately.
 #
 # DND

@@ -1,6 +1,6 @@
 import Foundation
 
-// The -focus click action is built by composing small "providers".
+// The --focus click action is built by composing small "providers".
 // Each provider inspects a shared FocusContext and either returns a
 // shell command (its piece of the action) or nil if it doesn't apply.
 //
@@ -58,7 +58,7 @@ let registeredFocusProviders: [FocusProvider] = [
     TmuxFocusProvider(),
 ]
 
-/// Result of `-focus` resolution.
+/// Result of `--focus` resolution.
 /// `action` is the shell command that runs on click (raise window,
 /// jump to pane). `dismissKey` is the fingerprint the daemon uses
 /// to auto-dismiss when the user visits the source. Either may be
@@ -77,7 +77,7 @@ struct DismissKeyPayload: Codable {
     let tty: String?
 }
 
-/// Build the click-action shell string and dismiss-key for `-focus`.
+/// Build the click-action shell string and dismiss-key for `--focus`.
 /// Returns a result whose fields are nil when nothing applied; main()
 /// emits a warning in that case and the notification fires without
 /// either piece.

@@ -285,12 +285,12 @@ final class IntegrationsMenu: NSObject, NSMenuDelegate {
         let exe = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
         let cli = exe.deletingLastPathComponent().appendingPathComponent("notchify").path
         guard FileManager.default.fileExists(atPath: cli) else { return }
-        var args = [title, body, "-sound", "ready", "-group", group]
+        var args = [title, body, "--sound", "ready", "--group", group]
         // Use notchify's own menubar-style glyph (rendered to a temp
         // PNG in white, sized for the chip) so install confirmations
         // are visibly branded as notchify and not anonymous chips.
         if let icon = StatusBarController.chipIconPath() {
-            args.append(contentsOf: ["-icon", icon])
+            args.append(contentsOf: ["--icon", icon])
         }
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: cli)

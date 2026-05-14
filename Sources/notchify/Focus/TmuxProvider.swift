@@ -5,7 +5,7 @@ import Foundation
 /// provider — composes with whichever one matched.
 ///
 /// We bake the absolute path to the tmux binary into the action
-/// string at -focus time, because notchify-daemon runs from launchd
+/// string at --focus time, because notchify-daemon runs from launchd
 /// with a minimal PATH and would otherwise fail to find tmux at
 /// click time.
 struct TmuxFocusProvider: FocusProvider {

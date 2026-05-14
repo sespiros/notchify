@@ -3,7 +3,7 @@ import Foundation
 /// Short one-liner shown on bad args. The full options list lives
 /// in `help()`, reachable via `-h` / `--help`.
 func usage() -> Never {
-    let text = "usage: notchify <title> [body] [options] (run 'notchify -h' for full help)\n"
+    let text = "usage: notchify <title> [body] [options] | notchify --daemon quit (run 'notchify -h' for full help)\n"
     FileHandle.standardError.write(text.data(using: .utf8)!)
     exit(2)
 }
@@ -12,25 +12,28 @@ func usage() -> Never {
 func help() -> Never {
     let text = """
 usage: notchify <title> [body] [options]
+       notchify --daemon quit
 
-  -icon <name|path>   SF Symbol or image file (default: bell.fill)
-                      e.g. checkmark.circle.fill, ~/icons/claude.png
-  -color <name>       tint for SF Symbol icons (default: white)
-                      orange, red, yellow, green, blue, purple, pink, gray
-  -sound <name>       ready | warning | info | success | error
-                      or any name from /System/Library/Sounds/ (default: silent)
-  -action <url|cmd>   URL opened or shell command run on click
-  -focus              raise source terminal / jump to tmux pane on click
-                      (mutually exclusive with -action; implies -timeout 0)
-  -timeout <secs>     auto-dismiss after N seconds, 0 = persistent (default: 5)
-  -group <name>       stack notifications under a named chip;
-                      icon/color come from the first arrival in the group
+  -i, --icon <name|path>  SF Symbol or image file (default: bell.fill)
+                          e.g. checkmark.circle.fill, ~/icons/claude.png
+  -c, --color <name>      tint for SF Symbol icons (default: white)
+                          orange, red, yellow, green, blue, purple, pink, gray
+  -s, --sound <name>      ready | warning | info | success | error
+                          or any name from /System/Library/Sounds/ (default: silent)
+  -a, --action <url|cmd>  URL opened or shell command run on click
+  -f, --focus             raise source terminal / jump to tmux pane on click
+                          (mutually exclusive with --action; implies --timeout 0)
+  -t, --timeout <secs>    auto-dismiss after N seconds, 0 = persistent (default: 5)
+  -g, --group <name>      stack notifications under a named chip;
+                          icon/color come from the first arrival in the group
+  --daemon quit           quit the running daemon
 
 Examples:
   notchify "Done" "build succeeded"
-  notchify "Heads up" "deploy needs input" -icon exclamationmark.triangle.fill -color orange
-  notchify "Open" "tap me" -action https://example.com
-  notchify "Build done" "ready to commit" -group claude -icon ~/icons/claude.png
+  notchify "Heads up" "deploy needs input" --icon exclamationmark.triangle.fill --color orange
+  notchify "Open" "tap me" --action https://example.com
+  notchify "Build done" "ready to commit" -g claude -i ~/icons/claude.png
+  notchify --daemon quit
 
 """
     FileHandle.standardOutput.write(text.data(using: .utf8)!)
@@ -49,27 +52,38 @@ var group: String?
 var positionals: [String] = []
 
 var args = Array(CommandLine.arguments.dropFirst())
+if args.first == "--daemon" {
+    args.removeFirst()
+    guard args.count == 1, args[0] == "quit" else { usage() }
+    struct CommandPayload: Encodable {
+        let type = "command"
+        let command = "quit"
+    }
+    try sendToDaemon(try JSONEncoder().encode(CommandPayload()))
+    exit(0)
+}
+
 while !args.isEmpty {
     let flag = args.removeFirst()
     switch flag {
-    case "-icon":
+    case "-i", "--icon":
         guard !args.isEmpty else { usage() }
         icon = args.removeFirst()
-    case "-color":
+    case "-c", "--color":
         guard !args.isEmpty else { usage() }
         color = args.removeFirst()
-    case "-sound":
+    case "-s", "--sound":
         guard !args.isEmpty else { usage() }
         sound = args.removeFirst()
-    case "-action":
+    case "-a", "--action":
         guard !args.isEmpty else { usage() }
         action = args.removeFirst()
-    case "-focus":
+    case "-f", "--focus":
         focus = true
-    case "-timeout":
+    case "-t", "--timeout":
         guard !args.isEmpty, let v = Double(args.removeFirst()) else { usage() }
         timeout = v
-    case "-group":
+    case "-g", "--group":
         guard !args.isEmpty else { usage() }
         group = args.removeFirst()
     case "-h", "--help":
@@ -93,17 +107,17 @@ guard let title else { usage() }
 var dismissKey: DismissKeyPayload? = nil
 if focus {
     if action != nil {
-        FileHandle.standardError.write("notchify: -focus and -action are mutually exclusive\n".data(using: .utf8)!)
+        FileHandle.standardError.write("notchify: --focus and --action are mutually exclusive\n".data(using: .utf8)!)
         exit(2)
     }
     let env = ProcessInfo.processInfo.environment
     let result = buildFocus(env: env)
     if result.action == nil && result.dismissKey == nil {
-        FileHandle.standardError.write("notchify: -focus requested but no terminal or tmux context detected; ignoring\n".data(using: .utf8)!)
+        FileHandle.standardError.write("notchify: --focus requested but no terminal or tmux context detected; ignoring\n".data(using: .utf8)!)
     }
     action = result.action
     dismissKey = result.dismissKey
-    // -focus implies persist: the notification keeps a row in its
+    // --focus implies persist: the notification keeps a row in its
     // stack after the in-flight retracts, ready to be dismissed
     // when the user visits the source.
     if timeout == nil {
@@ -135,28 +149,32 @@ let payload = Payload(
 )
 let data = try JSONEncoder().encode(payload)
 
-let path = "/tmp/notchify.sock"
-let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-guard fd >= 0 else { fputs("socket() failed\n", stderr); exit(1) }
-defer { close(fd) }
+try sendToDaemon(data)
 
-var addr = sockaddr_un()
-addr.sun_family = sa_family_t(AF_UNIX)
-let pathCap = MemoryLayout.size(ofValue: addr.sun_path)
-path.withCString { src in
-    withUnsafeMutablePointer(to: &addr.sun_path) { dst in
-        _ = strlcpy(UnsafeMutableRawPointer(dst).assumingMemoryBound(to: CChar.self), src, pathCap)
+func sendToDaemon(_ data: Data) throws {
+    let path = "/tmp/notchify.sock"
+    let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+    guard fd >= 0 else { fputs("socket() failed\n", stderr); exit(1) }
+    defer { close(fd) }
+
+    var addr = sockaddr_un()
+    addr.sun_family = sa_family_t(AF_UNIX)
+    let pathCap = MemoryLayout.size(ofValue: addr.sun_path)
+    path.withCString { src in
+        withUnsafeMutablePointer(to: &addr.sun_path) { dst in
+            _ = strlcpy(UnsafeMutableRawPointer(dst).assumingMemoryBound(to: CChar.self), src, pathCap)
+        }
     }
-}
-let connectOK = withUnsafePointer(to: &addr) {
-    $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-        Darwin.connect(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
+    let connectOK = withUnsafePointer(to: &addr) {
+        $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+            Darwin.connect(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
+        }
     }
-}
-guard connectOK == 0 else {
-    fputs("connect(\(path)) failed: is notchify-daemon running?\n", stderr)
-    exit(1)
-}
-data.withUnsafeBytes { buf in
-    _ = write(fd, buf.baseAddress, data.count)
+    guard connectOK == 0 else {
+        fputs("connect(\(path)) failed: is notchify-daemon running?\n", stderr)
+        exit(1)
+    }
+    data.withUnsafeBytes { buf in
+        _ = write(fd, buf.baseAddress, data.count)
+    }
 }
