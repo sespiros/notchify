@@ -29,11 +29,11 @@ export default function (pi: ExtensionAPI) {
     const icon = `${HOME}/.config/pi/icons/done.png`;
 
     // Run synchronously: backgrounding reparents notchify to launchd,
-    // breaking getppid()-based bundle detection used by -focus.
+    // breaking getppid()-based bundle detection used by --focus.
     try {
       spawnSync(
         "notchify",
-        [title, body, "-sound", "ready", "-icon", icon, "-group", group, "-focus"],
+        [title, body, "--sound", "ready", "--icon", icon, "--group", group, "--focus"],
         { stdio: "ignore", env: process.env }
       );
     } catch {
