@@ -30,6 +30,7 @@ struct VerticalListScroll<Content: View>: NSViewRepresentable {
         let host = NSHostingView(rootView: content())
         scroll.documentView = host
         sizeHostToFit(host: host, viewportWidth: viewportWidth)
+        updateScrollBehavior(scroll, viewportHeight: viewportHeight)
 
         scroll.contentView.postsBoundsChangedNotifications = true
         host.postsFrameChangedNotifications = true
@@ -68,6 +69,7 @@ struct VerticalListScroll<Content: View>: NSViewRepresentable {
             host.rootView = content()
             sizeHostToFit(host: host, viewportWidth: viewportWidth)
         }
+        updateScrollBehavior(nsView, viewportHeight: viewportHeight)
         Task { @MainActor [coord = context.coordinator] in coord.publishScrollState() }
     }
 
@@ -76,6 +78,16 @@ struct VerticalListScroll<Content: View>: NSViewRepresentable {
         let fitting = host.fittingSize
         let height = max(fitting.height, target.height)
         host.frame = NSRect(x: 0, y: 0, width: viewportWidth, height: height)
+    }
+
+    private func updateScrollBehavior(_ scroll: NSScrollView, viewportHeight: CGFloat) {
+        let docHeight = scroll.documentView?.frame.height ?? 0
+        let canScrollVertically = docHeight - viewportHeight > 1
+        scroll.verticalScrollElasticity = canScrollVertically ? .allowed : .none
+
+        guard !canScrollVertically, scroll.contentView.bounds.origin.y != 0 else { return }
+        scroll.contentView.scroll(to: .zero)
+        scroll.reflectScrolledClipView(scroll.contentView)
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }

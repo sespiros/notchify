@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let updater = Updater.makeIfEnabled()
     var statusBar: StatusBarController?
     private var screenObserver: NSObjectProtocol?
+    private var signalSources: [DispatchSourceSignal] = []
 
     static func main() {
         let app = NSApplication.shared
@@ -18,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        installTerminationHandlers()
         statusBar = StatusBarController(updater: updater)
         screenObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
@@ -36,6 +38,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             NSLog("notchify-daemon: failed to start: \(error)")
             NSApp.terminate(nil)
+        }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        server.stop()
+    }
+
+    private func installTerminationHandlers() {
+        for sig in [SIGINT, SIGTERM] {
+            signal(sig, SIG_IGN)
+            let source = DispatchSource.makeSignalSource(signal: sig, queue: .main)
+            source.setEventHandler { [weak self] in
+                self?.server.stop()
+                NSApp.terminate(nil)
+            }
+            source.resume()
+            signalSources.append(source)
         }
     }
 }

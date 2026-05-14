@@ -93,12 +93,8 @@ struct HorizontalChipScroll<Content: View>: NSViewRepresentable {
                 let visible = nsView.contentView.bounds.width
                 let maxX = max(0, doc.frame.width - visible)
                 let target = min(maxX, max(0, requested))
-                NSAnimationContext.runAnimationGroup { ctx in
-                    ctx.duration = 0.22
-                    ctx.allowsImplicitAnimation = true
-                    nsView.contentView.animator().setBoundsOrigin(NSPoint(x: target, y: 0))
-                    nsView.reflectScrolledClipView(nsView.contentView)
-                }
+                nsView.contentView.setBoundsOrigin(NSPoint(x: target, y: 0))
+                nsView.reflectScrolledClipView(nsView.contentView)
             }
         }
         Task { @MainActor [coord = context.coordinator] in coord.publishScrollState() }

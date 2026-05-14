@@ -17,7 +17,7 @@ struct HoverListView: View {
 
     var body: some View {
         let maxScroll = max(contentHeight - hoverDropHeight, 0)
-        let needsScroll = maxScroll > 0
+        let needsScroll = maxScroll > 1
         let topFadeActive = needsScroll && listScrollOffset > 1
         let bottomFadeActive = needsScroll && listScrollOffset < maxScroll - 1
 
