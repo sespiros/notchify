@@ -54,4 +54,26 @@ final class NotchModel {
     /// arrived yet or if the most-recent chipstack has since been
     /// emptied.
     var mostRecentChipstackID: String? = nil
+    /// System-owned indicator shown while macOS Focus / Do Not
+    /// Disturb is active. This is deliberately separate from
+    /// `chipstacks` so muted status never enters notification
+    /// queues, dwell timers, row actions, or stack dismissal.
+    var focusMuted: Bool = false
+    /// Count of notifications suppressed while Focus was active.
+    /// Displayed as a small badge on the muted chip until Focus
+    /// clears.
+    var focusSuppressedCount: Int = 0
+    /// Notifications suppressed while Focus was active, newest
+    /// first. Promoted to real stacks when Focus clears.
+    var focusMutedNotifications: [StoredNotification] = []
+    /// Stable chip projections of `focusMutedNotifications`, used
+    /// while the futification is expanded. Keeping this in model
+    /// state avoids rebuilding chip identities inside SwiftUI hover
+    /// rendering.
+    var focusMutedPreviewChipstacks: [ChipStack] = []
+    /// AppKit-level hover state for the painted pill while the
+    /// Focus muted indicator is visible. This bypasses SwiftUI
+    /// hit-testing because the notch panel itself controls mouse
+    /// event passthrough.
+    var focusMutedPillHovered: Bool = false
 }

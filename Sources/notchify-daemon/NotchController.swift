@@ -57,6 +57,9 @@ final class NotchController {
     /// user visits their source. Runs only while there are
     /// dismissKey-bearing rows in the stacks.
     private var focusTimer: Timer?
+    /// Low-frequency poll for macOS Focus / DND so the notch can
+    /// show a muted indicator even before a notification arrives.
+    private var focusStatusTimer: Timer?
 
     /// Whether SwiftUI currently has painted pill content. The panel
     /// itself stays at a stable maximum size for the active notch so
@@ -115,7 +118,9 @@ final class NotchController {
             model: model,
             onClick: { [weak self] n in self?.handleClick(n) },
             onRowClick: { [weak self] n in self?.handleRowClick(n) },
+            onMutedRowClick: { [weak self] n in self?.handleMutedRowClick(n) },
             onChipClick: { [weak self] chipstackID in self?.handleChipClick(chipstackID) },
+            onMutedChipClick: { [weak self] chipstackID in self?.handleMutedChipClick(chipstackID) },
             onInflightHover: { [weak self] hovering in self?.handleInflightHover(hovering) },
             onEngagementChange: { [weak self] engaged in self?.handleEngagementChange(engaged) },
             onPillSizeChange: { [weak self] size in self?.updateVisibleContentRect(pillSize: size) }
@@ -133,6 +138,8 @@ final class NotchController {
             Task { @MainActor in self?.updateIgnoresMouseEvents() }
             return event
         }
+
+        startFocusStatusTimer()
     }
 
     /// Track the painted pill in screen coordinates and refresh the
@@ -166,6 +173,12 @@ final class NotchController {
         let shouldAccept = hasVisiblePillContent
             && pillScreenRect.width > 0
             && pillScreenRect.contains(NSEvent.mouseLocation)
+        let focusHover = shouldAccept
+            && model.focusMuted
+            && !model.focusMutedNotifications.isEmpty
+        if model.focusMutedPillHovered != focusHover {
+            model.focusMutedPillHovered = focusHover
+        }
         if panel.ignoresMouseEvents != !shouldAccept {
             panel.ignoresMouseEvents = !shouldAccept
         }
@@ -181,9 +194,11 @@ final class NotchController {
 
         // Do Not Disturb means do not disturb. Drop the message
         // entirely (no chip, no body, no sound) rather than ingesting
-        // it as a silent persistent row, so the pill stays invisible
-        // while DND is active.
+        // it as a silent persistent row. The system muted chip keeps
+        // the reason visible and can reveal the suppressed rows while
+        // hovered.
         if Focus.doNotDisturbActive() {
+            recordFocusSuppressed(message)
             return
         }
 
@@ -331,6 +346,94 @@ final class NotchController {
             model.forcedVisible = false
         }
         updateFocusTimer()
+    }
+
+    private func startFocusStatusTimer() {
+        updateFocusMutedState()
+        let timer = Timer(timeInterval: 2.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.updateFocusMutedState() }
+        }
+        timer.tolerance = 0.5
+        RunLoop.main.add(timer, forMode: .common)
+        focusStatusTimer = timer
+    }
+
+    private func updateFocusMutedState() {
+        let active = Focus.doNotDisturbActive()
+        guard model.focusMuted != active else { return }
+        model.focusMuted = active
+        if !active {
+            model.focusMutedPillHovered = false
+        }
+        if active {
+            ensurePanelOnScreen()
+            return
+        }
+
+        promoteFocusMutedNotifications()
+        model.focusSuppressedCount = 0
+        model.focusMutedNotifications.removeAll()
+        model.focusMutedPreviewChipstacks.removeAll()
+        if chipstacks.isEmpty && model.liveStack.isEmpty && !model.forcedVisible {
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .milliseconds(NotchController.slideOutDuration))
+                guard let self,
+                      !self.model.focusMuted,
+                      self.chipstacks.isEmpty,
+                      self.model.liveStack.isEmpty,
+                      !self.model.forcedVisible else { return }
+                self.panel.orderOut(nil)
+            }
+        }
+    }
+
+    private func recordFocusSuppressed(_ message: Message) {
+        model.focusMuted = true
+        model.focusSuppressedCount += 1
+        model.focusMutedNotifications.insert(
+            StoredNotification(message: message, chipstackID: chipstackIDFor(message)),
+            at: 0
+        )
+        if model.focusMutedNotifications.count > 25 {
+            model.focusMutedNotifications.removeLast()
+        }
+        rebuildFocusMutedPreviewChipstacks()
+        ensurePanelOnScreen()
+    }
+
+    private func promoteFocusMutedNotifications() {
+        guard !model.focusMutedNotifications.isEmpty else { return }
+        for notification in model.focusMutedNotifications.reversed() {
+            ingest(notification)
+        }
+        publishStacks()
+        ensurePanelOnScreen()
+    }
+
+    private func rebuildFocusMutedPreviewChipstacks() {
+        var stacksByID: [String: ChipStack] = [:]
+        var order: [String] = []
+        for notification in model.focusMutedNotifications.reversed() {
+            let id = "muted:\(notification.chipstackID)"
+            if stacksByID[id] == nil {
+                stacksByID[id] = ChipStack(
+                    id: id,
+                    isAnonymous: notification.chipstackID.hasPrefix("a:")
+                )
+                order.append(id)
+            }
+            var stack = stacksByID[id]!
+            let message = notification.message
+            if stack.resolvedIcon == nil {
+                stack.resolvedIcon = message.icon ?? "bell.fill"
+            }
+            if stack.resolvedColor == nil {
+                stack.resolvedColor = message.color ?? "gray"
+            }
+            stack.notifications.insert(notification, at: 0)
+            stacksByID[id] = stack
+        }
+        model.focusMutedPreviewChipstacks = order.compactMap { stacksByID[$0] }
     }
 
     private func shouldSuppressForCurrentFocus(_ message: Message) -> Bool {
@@ -615,6 +718,27 @@ final class NotchController {
         publishStacks()
         if willEmptyEverything {
             scheduleEndOfPillRetract()
+        }
+    }
+
+    private func handleMutedRowClick(_ n: StoredNotification) {
+        runAction(n.message.action)
+        removeFocusMutedNotification(n)
+    }
+
+    private func handleMutedChipClick(_ chipstackID: String) {
+        guard let stack = model.focusMutedPreviewChipstacks.first(where: { $0.id == chipstackID }),
+              let top = stack.notifications.first else { return }
+        runAction(top.message.action)
+        removeFocusMutedNotification(top)
+    }
+
+    private func removeFocusMutedNotification(_ n: StoredNotification) {
+        model.focusMutedNotifications.removeAll { $0.id == n.id }
+        model.focusSuppressedCount = model.focusMutedNotifications.count
+        rebuildFocusMutedPreviewChipstacks()
+        if model.focusMutedNotifications.isEmpty {
+            model.focusMutedPillHovered = false
         }
     }
 

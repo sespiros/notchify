@@ -31,7 +31,9 @@ struct NotchPillView: View {
     let model: NotchModel
     var onClick: (StoredNotification) -> Void
     var onRowClick: (StoredNotification) -> Void
+    var onMutedRowClick: (StoredNotification) -> Void
     var onChipClick: (String) -> Void
+    var onMutedChipClick: (String) -> Void
     var onInflightHover: (Bool) -> Void = { _ in }
     var onEngagementChange: (Bool) -> Void = { _ in }
     /// Reports the rendered pill's size whenever it changes. The
@@ -43,7 +45,9 @@ struct NotchPillView: View {
         model: NotchModel,
         onClick: @escaping (StoredNotification) -> Void,
         onRowClick: @escaping (StoredNotification) -> Void,
+        onMutedRowClick: @escaping (StoredNotification) -> Void = { _ in },
         onChipClick: @escaping (String) -> Void,
+        onMutedChipClick: @escaping (String) -> Void = { _ in },
         onInflightHover: @escaping (Bool) -> Void = { _ in },
         onEngagementChange: @escaping (Bool) -> Void = { _ in },
         onPillSizeChange: @escaping (CGSize) -> Void = { _ in }
@@ -51,7 +55,9 @@ struct NotchPillView: View {
         self.model = model
         self.onClick = onClick
         self.onRowClick = onRowClick
+        self.onMutedRowClick = onMutedRowClick
         self.onChipClick = onChipClick
+        self.onMutedChipClick = onMutedChipClick
         self.onInflightHover = onInflightHover
         self.onEngagementChange = onEngagementChange
         self.onPillSizeChange = onPillSizeChange
@@ -100,6 +106,9 @@ struct NotchPillView: View {
     /// expand the most-recent stack when the cursor is on a generic
     /// part of the pill rather than a specific slot).
     @State private var pillHovered: Bool = false
+    @State private var focusMutedSlotExiting: Bool = false
+    @State private var focusMutedChipsVisible: Bool = false
+    @State private var focusMutedRevealTask: Task<Void, Never>? = nil
     /// Debounces hover-clear so the cursor can travel between a slot
     /// and the list area below it without flickering the pill closed.
     @State private var hoverClearTask: Task<Void, Never>? = nil
@@ -126,10 +135,13 @@ struct NotchPillView: View {
     @State private var lastArrivalScrollID: String? = nil
 
     var body: some View {
-        let stacks = model.chipstacks
+        let mutedPreviewStacks = model.focusMutedPreviewChipstacks
+        let focusPreviewActive = focusMutedChipsVisible && !mutedPreviewStacks.isEmpty
+        let stacks = model.chipstacks + (focusPreviewActive ? mutedPreviewStacks : [])
         let notchSize = model.notchSize
 
-        let total = stacks.count
+        let hasFocusMutedSlot = model.focusMuted && !focusPreviewActive && !focusMutedSlotExiting
+        let total = stacks.count + (hasFocusMutedSlot ? 1 : 0)
         // Shelf viewport: grows linearly up to maxVisibleSlots, then
         // caps at "2 chips fully + a half-slot peek" past that. The
         // trailing fade gradient then covers the peeking chip so it
@@ -160,7 +172,7 @@ struct NotchPillView: View {
         let inflightDropHeight = currentInflightDropHeight(notchSize: notchSize, pillWidth: pillWidth)
         let dropHeight = max(inflightDropHeight, hoverDropHeight)
         let pillHeight = notchSize.height + dropHeight
-        let pillVisible = !stacks.isEmpty || isInflight || model.forcedVisible
+        let pillVisible = !stacks.isEmpty || isInflight || model.forcedVisible || model.focusMuted
         // With Reduce Motion the pill stays at its target position and
         // fades in/out instead of sliding from above the screen edge.
         let slideOffset: CGFloat = (pillVisible || reduceMotion)
@@ -189,8 +201,11 @@ struct NotchPillView: View {
                 liveActiveID: (stacks.count >= 2 && hoveredStack == nil)
                     ? liveStack.first?.chipstackID
                     : nil,
-                arrivalTargetID: lastArrivalScrollID,
+                arrivalTargetID: effectiveHoveredID == nil ? lastArrivalScrollID : nil,
                 hasOverflow: hasOverflow,
+                focusMuted: hasFocusMutedSlot,
+                focusMutedSlotExiting: focusMutedSlotExiting,
+                focusSuppressedCount: model.focusSuppressedCount,
                 notchSize: notchSize,
                 shelfWidth: shelfWidth,
                 pillWidth: pillWidth,
@@ -215,21 +230,25 @@ struct NotchPillView: View {
                     pillHeight: pillHeight,
                     hoverDropHeight: hoverDropHeight,
                     listScrollOffset: $listScrollOffset,
-                    onRowClick: onRowClick,
+                    onRowClick: hs.id.hasPrefix("muted:") ? onMutedRowClick : onRowClick,
                     onHover: handleHover
                 )
                 .id(hs.id)
                 .transition(.opacity)
             }
+
         }
         .frame(width: pillWidth, height: pillHeight)
         .clipped()
         .offset(y: slideOffset)
         .opacity(pillOpacity)
         .animation(reduceMotion ? .easeOut(duration: 0.18) : .easeOut(duration: 0.22), value: pillVisible)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: stacks.count)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: total)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: shelfWidth)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: pillHeight)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: hoveredChipstackID)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: focusMutedSlotExiting)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: focusMutedChipsVisible)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: liveStack.first?.chipstackID)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.28), value: liveStack.first?.id)
         .onHover { hovering in handlePillHover(hovering) }
@@ -240,10 +259,10 @@ struct NotchPillView: View {
         // returning .zero. We feed `pillVisible`, pillWidth and
         // pillHeight into a tuple so .onChange fires on any of them.
         .onChange(of: SizeReport(visible: pillVisible, width: pillWidth, height: pillHeight)) { _, rep in
-            onPillSizeChange(rep.visible ? CGSize(width: rep.width, height: rep.height) : .zero)
+            publishPillSize(rep)
         }
         .onAppear {
-            onPillSizeChange(pillVisible ? CGSize(width: pillWidth, height: pillHeight) : .zero)
+            publishPillSize(SizeReport(visible: pillVisible, width: pillWidth, height: pillHeight))
         }
         .onChange(of: model.chipstacks.map(\.id)) { _, newIDs in
             if let id = hoveredChipstackID, !newIDs.contains(id) {
@@ -259,8 +278,16 @@ struct NotchPillView: View {
         .onChange(of: pillVisible) { _, newVisible in
             if !newVisible {
                 hoveredChipstackID = nil
+                clearFocusMutedHover()
                 pillHovered = false
                 model.isUserEngaged = false
+            }
+        }
+        .onChange(of: model.focusMutedPillHovered) { _, hovering in
+            if hovering {
+                beginFocusMutedHover()
+            } else {
+                clearFocusMutedHoverIfStable()
             }
         }
         .onChange(of: model.liveStack.first?.id) { handleInflightChange(pillWidth: pillWidth, notchSize: notchSize) }
@@ -302,6 +329,9 @@ struct NotchPillView: View {
         liveActiveID: String?,
         arrivalTargetID: String?,
         hasOverflow: Bool,
+        focusMuted: Bool,
+        focusMutedSlotExiting: Bool,
+        focusSuppressedCount: Int,
         notchSize: CGSize,
         shelfWidth: CGFloat,
         pillWidth: CGFloat,
@@ -340,14 +370,18 @@ struct NotchPillView: View {
                     let isExpandedStack = (stack.id == effectiveHoveredID)
                     let isLiveActive = (stack.id == liveActiveID)
                     Button {
-                        onChipClick(stack.id)
+                        if stack.id.hasPrefix("muted:") {
+                            onMutedChipClick(stack.id)
+                        } else {
+                            onChipClick(stack.id)
+                        }
                     } label: {
                         SlotIconView(
                             stack: stack,
                             notchHeight: notchSize.height,
                             isExpanded: isExpandedStack,
                             isLiveActive: isLiveActive,
-                            totalChipCount: chipstacks.count
+                            totalChipCount: chipstacks.count + (focusMuted ? 1 : 0)
                         )
                             .frame(width: Self.slotWidth, height: notchSize.height)
                             .contentShape(Rectangle())
@@ -361,6 +395,38 @@ struct NotchPillView: View {
                                 removal: .opacity.animation(.easeOut(duration: 0.13))
                             )
                         )
+                }
+
+                if focusMuted {
+                    Button {
+                    } label: {
+                        ZStack {
+                            Color.black.opacity(0.001)
+
+                            if !focusMutedSlotExiting {
+                                FocusMutedSlotView(
+                                    notchHeight: notchSize.height,
+                                    suppressedCount: focusSuppressedCount
+                                )
+                                .frame(width: Self.slotWidth, height: notchSize.height)
+                                .allowsHitTesting(false)
+                                .transition(.opacity.combined(with: .offset(y: -10)))
+                            }
+                        }
+                        .frame(width: Self.slotWidth, height: notchSize.height)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(NoFeedbackButtonStyle())
+                    .frame(width: Self.slotWidth, height: notchSize.height)
+                    .contentShape(Rectangle())
+                    .onHover { hovering in
+                        if hovering {
+                            beginFocusMutedHover()
+                        }
+                    }
+                    .accessibilityLabel("Notifications muted by Focus")
+                    .help("Notifications muted by Focus")
+                    .transition(.opacity.animation(.easeInOut(duration: 0.18)))
                 }
             }
             .padding(.leading, Self.shelfPaddingLeft)
@@ -460,6 +526,42 @@ struct NotchPillView: View {
             hoverClearTask?.cancel()
             hoverClearTask = nil
             hoveredChipstackID = nil
+            clearFocusMutedHoverIfStable()
+        }
+    }
+
+    private func beginFocusMutedHover() {
+        guard !model.focusMutedNotifications.isEmpty else { return }
+        if focusMutedSlotExiting || focusMutedChipsVisible { return }
+        hoveredChipstackID = nil
+        focusMutedRevealTask?.cancel()
+        focusMutedRevealTask = nil
+        focusMutedSlotExiting = true
+        focusMutedRevealTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(220))
+            guard !Task.isCancelled else { return }
+            focusMutedChipsVisible = true
+            focusMutedSlotExiting = false
+            focusMutedRevealTask = nil
+        }
+    }
+
+    private func clearFocusMutedHoverIfStable() {
+        guard !focusMutedSlotExiting else { return }
+        clearFocusMutedHover()
+    }
+
+    private func clearFocusMutedHover() {
+        focusMutedRevealTask?.cancel()
+        focusMutedRevealTask = nil
+        focusMutedChipsVisible = false
+        focusMutedSlotExiting = false
+    }
+
+    private func publishPillSize(_ rep: SizeReport) {
+        let size = rep.visible ? CGSize(width: rep.width, height: rep.height) : .zero
+        Task { @MainActor in
+            onPillSizeChange(size)
         }
     }
 
@@ -555,6 +657,29 @@ struct NotchPillView: View {
         case "white": return .white
         case "gray", "grey": return .gray
         default: return nil
+        }
+    }
+}
+
+private struct FocusMutedSlotView: View {
+    let notchHeight: CGFloat
+    let suppressedCount: Int
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Image(systemName: "bell.slash.fill")
+                .resizable()
+                .scaledToFit()
+                .foregroundStyle(.white.opacity(0.82))
+                .frame(width: 14, height: 14)
+                .frame(width: NotchPillView.slotWidth, height: notchHeight)
+
+            if suppressedCount > 0 {
+                Text("\(min(suppressedCount, 99))")
+                    .font(Design.Font.slotBadge)
+                    .foregroundStyle(.white)
+                    .offset(x: -3, y: 4)
+            }
         }
     }
 }
