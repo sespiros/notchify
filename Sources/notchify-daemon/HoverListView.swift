@@ -33,7 +33,7 @@ struct HoverListView: View {
                         notification: n,
                         onClick: { onRowClick(n) }
                     )
-                    .frame(height: NotchPillView.rowHeight)
+                    .frame(height: NotchPillView.measureRowHeight(text: n.message.text, pillWidth: pillWidth))
                 }
             }
             .frame(width: pillWidth)

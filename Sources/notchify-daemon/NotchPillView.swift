@@ -166,7 +166,9 @@ struct NotchPillView: View {
         }
         let hoverDropHeight: CGFloat = {
             guard let hs = hoveredStack else { return 0 }
-            let raw = CGFloat(hs.notifications.count) * Self.rowHeight
+            let raw = hs.notifications.reduce(0.0) { sum, n in
+                sum + Self.measureRowHeight(text: n.message.text, pillWidth: pillWidth)
+            }
             return min(raw, Self.maxListHeight)
         }()
         let inflightDropHeight = currentInflightDropHeight(notchSize: notchSize, pillWidth: pillWidth)
@@ -495,6 +497,19 @@ struct NotchPillView: View {
     private static func measureDropHeight(text: String?, notchHeight: CGFloat, pillWidth: CGFloat) -> CGFloat {
         let body = text ?? ""
         if body.isEmpty { return notchHeight }
+        return bodyNeedsTwoLines(text: text, pillWidth: pillWidth) ? extraHeightTwoLine : extraHeight
+    }
+
+    /// Per-row height for the hover-expanded list. Mirrors the inflight
+    /// drop heuristic so a hovered row of the same notification matches
+    /// what its inflight body used.
+    static func measureRowHeight(text: String?, pillWidth: CGFloat) -> CGFloat {
+        bodyNeedsTwoLines(text: text, pillWidth: pillWidth) ? extraHeightTwoLine : extraHeight
+    }
+
+    private static func bodyNeedsTwoLines(text: String?, pillWidth: CGFloat) -> Bool {
+        let body = text ?? ""
+        guard !body.isEmpty else { return false }
         let font = NSFont.systemFont(ofSize: 11)
         let availableWidth = max(pillWidth - 18, 100)
         let attr = NSAttributedString(string: body, attributes: [.font: font])
@@ -503,8 +518,7 @@ struct NotchPillView: View {
             options: [.usesLineFragmentOrigin, .usesFontLeading]
         )
         let oneLineHeight = font.boundingRectForFont.height
-        let needsTwoLines = rect.height > oneLineHeight + 1
-        return needsTwoLines ? extraHeightTwoLine : extraHeight
+        return rect.height > oneLineHeight + 1
     }
 
     private func handlePillHover(_ hovering: Bool) {
