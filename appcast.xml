@@ -138,5 +138,24 @@ xattr -d com.apple.quarantine /Applications/Notchify.app
 <p><a href="https://github.com/sespiros/notchify/compare/v0.6.1...v0.6.2">compare v0.6.1...v0.6.2</a></p>]]></description>
             <enclosure url="https://github.com/sespiros/notchify/releases/download/v0.6.2/Notchify-0.6.2.dmg" sparkle:edSignature="Bd3jYS1I0XYApaD92G+xAT2gB+f4UOnanss/uQtBNnzH/Rxc8KN8NN/4fNdtD2CyOH5s/XlsqT6/JyapSuv8Dg==" length="1951435" type="application/octet-stream"/>
         </item>
+        <item>
+            <title>v0.6.3</title>
+            <pubDate>Fri, 15 May 2026 13:27:37 +0000</pubDate>
+            <sparkle:version>0.6.3</sparkle:version>
+            <sparkle:shortVersionString>0.6.3</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<p>v0.6.3 fixes a layout glitch in the hover-expanded notification list.</p>
+<h2>🐛 Bug fixes</h2>
+<ul>
+<li>Hover-expanded rows now use the same per-notification height as the<br>
+inflight body (40pt for one-line bodies, 54pt for two-line). Previously<br>
+every row was hard-coded to 40pt, so a two-line body that fit during<br>
+the initial banner got squished against the pill's bottom edge once<br>
+the user hovered it back open.</li>
+</ul>
+<h2>Full changelog</h2>
+<p><a href="https://github.com/sespiros/notchify/compare/v0.6.2...v0.6.3">compare v0.6.2...v0.6.3</a></p>]]></description>
+            <enclosure url="https://github.com/sespiros/notchify/releases/download/v0.6.3/Notchify-0.6.3.dmg" sparkle:edSignature="EQn+yjonCG0yOrkrWiuvFhmN0YtV5ABFLtOX1WVApfETyV5ItZH9iDfjZda1+fWtiwhIK6rJLgZSVvpX3VNODw==" length="1951961" type="application/octet-stream"/>
+        </item>
     </channel>
 </rss>
