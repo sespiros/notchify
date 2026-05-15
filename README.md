@@ -96,8 +96,11 @@ See [BUILDING.md](BUILDING.md).
   fire time, the active tmux pane) once a second and removes any
   rows whose dismiss-key matches. Already on the source at fire
   time? The notification is dropped silently.
-- Do-Not-Disturb active: ingested into its chip silently (no body,
-  no sound) so the user can read it once DND clears.
+- macOS Focus / Do-Not-Disturb is honored: muted arrivals queue under
+  a dedicated chip with a count badge, and hovering it reveals what
+  came in while you were focused. Pick the policy from the menubar
+  under **Focus Behavior**: mute for Do-Not-Disturb only (default),
+  any Focus mode, or never.
 - Renders only when macOS reports an active built-in notched display.
 - Uses macOS screen geometry APIs to anchor the overlay to the
   built-in notch area, even with an external monitor attached.
