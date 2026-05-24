@@ -239,6 +239,10 @@ struct NotchPillView: View {
                 .transition(.opacity)
             }
 
+            notchHitTarget(
+                chipstacks: stacks,
+                notchSize: notchSize
+            )
         }
         .frame(width: pillWidth, height: pillHeight)
         .clipped()
@@ -450,6 +454,29 @@ struct NotchPillView: View {
         .frame(width: pillWidth, height: pillHeight, alignment: .topLeading)
     }
 
+    @ViewBuilder
+    private func notchHitTarget(
+        chipstacks: [ChipStack],
+        notchSize: CGSize
+    ) -> some View {
+        if let rightmost = chipstacks.last {
+            Button {
+                if rightmost.id.hasPrefix("muted:") {
+                    onMutedChipClick(rightmost.id)
+                } else {
+                    onChipClick(rightmost.id)
+                }
+            } label: {
+                Color.black.opacity(0.001)
+                    .frame(width: notchSize.width, height: notchSize.height)
+            }
+            .buttonStyle(NoFeedbackButtonStyle())
+            .contentShape(Rectangle())
+            .onHover { hovering in handleNotchHover(stackID: rightmost.id, hovering: hovering) }
+            .accessibilityLabel("Dismiss newest notification")
+        }
+    }
+
     private func computeEffectiveHoveredID(
         stacks: [ChipStack],
         isInflight: Bool
@@ -610,6 +637,14 @@ struct NotchPillView: View {
         hoverClearTask?.cancel()
         hoverClearTask = nil
         hoveredChipstackID = stackID
+    }
+
+    private func handleNotchHover(stackID: String, hovering: Bool) {
+        if hovering {
+            handleHover(stackID, true)
+        } else if !pillHovered {
+            hoveredChipstackID = nil
+        }
     }
 
     /// Total horizontal room reserved for the shelf (excluding the
