@@ -157,5 +157,23 @@ the user hovered it back open.</li>
 <p><a href="https://github.com/sespiros/notchify/compare/v0.6.2...v0.6.3">compare v0.6.2...v0.6.3</a></p>]]></description>
             <enclosure url="https://github.com/sespiros/notchify/releases/download/v0.6.3/Notchify-0.6.3.dmg" sparkle:edSignature="EQn+yjonCG0yOrkrWiuvFhmN0YtV5ABFLtOX1WVApfETyV5ItZH9iDfjZda1+fWtiwhIK6rJLgZSVvpX3VNODw==" length="1951961" type="application/octet-stream"/>
         </item>
+        <item>
+            <title>v0.7.0</title>
+            <pubDate>Sun, 24 May 2026 11:06:21 +0000</pubDate>
+            <sparkle:version>0.7.0</sparkle:version>
+            <sparkle:shortVersionString>0.7.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<p>v0.7.0 adds VM-friendly notification delivery and makes stacked notifications easier to clear.</p>
+<h2>✨ Improvements</h2>
+<ul>
+<li>Added an optional loopback TCP listener for VM-to-host notifications. The daemon defaults to <code class="notranslate">127.0.0.1:43187</code>, keeps the native Unix socket path for local macOS clients, and exposes TCP as notification-only.</li>
+<li>The <code class="notranslate">notchify</code> CLI now falls back to TCP for plain notifications when the Unix socket is unavailable. <code class="notranslate">notchify --daemon quit</code> remains local-only through the Unix socket.</li>
+<li>Hovering the notch area now expands the rightmost stack, and clicking the same area dismisses its newest notification. Repeated clicks under the notch can drain a queue without aiming at each chip.</li>
+<li>The menubar menu is leaner: Integrations stays at the top level, while launch, CLI, TCP, and Focus options live under Settings.</li>
+</ul>
+<h2>Full changelog</h2>
+<p><a href="https://github.com/sespiros/notchify/compare/v0.6.3...v0.7.0">compare v0.6.3...v0.7.0</a></p>]]></description>
+            <enclosure url="https://github.com/sespiros/notchify/releases/download/v0.7.0/Notchify-0.7.0.dmg" sparkle:edSignature="gPhOVQ7RSRr55L8/uLeaFx6uONQTOXVvdlqOOIexYjK9Le3w2UaCv7Ins1Bv4COZueE0RqxdleR0JogExgXTAg==" length="1971861" type="application/octet-stream"/>
+        </item>
     </channel>
 </rss>
