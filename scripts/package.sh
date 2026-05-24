@@ -20,11 +20,22 @@ unset SDKROOT
 cd "$ROOT"
 swift build -c release
 
+# Build the portable CLI from the Go module under cmd/notchify. The
+# CLI is pure Go (CGO_ENABLED=0) so the same source cross-compiles to
+# darwin and linux without a libc dependency. The macOS .app
+# embeds the darwin build; release.yml also cross-builds the linux
+# target and uploads it as a standalone artifact.
+GO_OUT="$ROOT/.build/go-release"
+mkdir -p "$GO_OUT"
+GOOS=darwin GOARCH=$(uname -m | sed s/x86_64/amd64/) CGO_ENABLED=0 \
+    go build -trimpath -ldflags '-s -w' \
+    -o "$GO_OUT/notchify" ./cmd/notchify
+
 rm -rf "$APP" "$DMG"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 cp .build/release/notchify-daemon  "$APP/Contents/MacOS/notchify-daemon"
-cp .build/release/notchify         "$APP/Contents/MacOS/notchify"
+cp "$GO_OUT/notchify"              "$APP/Contents/MacOS/notchify"
 cp .build/release/notchify-recipes "$APP/Contents/MacOS/notchify-recipes"
 cp Resources/Info.plist            "$APP/Contents/Info.plist"
 

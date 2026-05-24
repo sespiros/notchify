@@ -8,7 +8,7 @@
 #
 # Override the CLI binary via NOTCHIFY env var, useful when iterating
 # in-tree without installing:
-#   NOTCHIFY=./.build/debug/notchify ./scripts/test.sh
+#   NOTCHIFY=./.build/go-debug/notchify ./scripts/test.sh
 #
 # Run a single section by passing its name as the first positional
 # argument. Run with no argument to see the list. Most sections need
@@ -16,13 +16,19 @@
 # completeness but isn't fully unattended.
 set -eu
 
-# Prefer the in-tree debug build over a system-installed `notchify`
-# so `./scripts/test.sh` exercises the current branch's CLI without
-# requiring `NOTCHIFY=...` to be set every time.
+# Prefer the in-tree Go build over a system-installed `notchify` so
+# `./scripts/test.sh` exercises the current branch's CLI without
+# requiring `NOTCHIFY=...` to be set every time. The Go module has no
+# external deps, so the on-demand build is offline and fast.
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-LOCAL_CLI="$SCRIPT_DIR/../.build/debug/notchify"
+ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+LOCAL_CLI="$ROOT/.build/go-debug/notchify"
 if [ -n "${NOTCHIFY-}" ]; then
     N="$NOTCHIFY"
+elif command -v go >/dev/null 2>&1; then
+    mkdir -p "$ROOT/.build/go-debug"
+    (cd "$ROOT" && CGO_ENABLED=0 go build -o "$LOCAL_CLI" ./cmd/notchify)
+    N="$LOCAL_CLI"
 elif [ -x "$LOCAL_CLI" ]; then
     N="$LOCAL_CLI"
 else

@@ -24,7 +24,7 @@
         # outside the nix sandbox.
         __noChroot = true;
 
-        nativeBuildInputs = [ ];
+        nativeBuildInputs = [ pkgs.go ];
 
         buildPhase = ''
           runHook preBuild
@@ -40,6 +40,16 @@
           /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift \
             build -c release --disable-sandbox --build-path $TMPDIR/build
 
+          # Portable CLI: pure Go (CGO_ENABLED=0), no external module
+          # dependencies, so the build is fully offline-capable inside
+          # the nix sandbox. Same source cross-compiles to linux-arm64
+          # for the agentbox release artifact (see release.yml).
+          export GOCACHE=$TMPDIR/gocache
+          export GOMODCACHE=$TMPDIR/gomodcache
+          mkdir -p $TMPDIR/go-bin
+          CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' \
+            -o $TMPDIR/go-bin/notchify ./cmd/notchify
+
           runHook postBuild
         '';
 
@@ -50,10 +60,10 @@
           mkdir -p $out/share/notchify
           mkdir -p $out/Applications/Notchify.app/Contents/{MacOS,Resources}
 
-          cp $TMPDIR/build/release/notchify         $out/bin/notchify
+          cp $TMPDIR/go-bin/notchify                $out/bin/notchify
           cp $TMPDIR/build/release/notchify-recipes $out/bin/notchify-recipes
           cp $TMPDIR/build/release/notchify-daemon  $out/Applications/Notchify.app/Contents/MacOS/notchify-daemon
-          cp $TMPDIR/build/release/notchify         $out/Applications/Notchify.app/Contents/MacOS/notchify
+          cp $TMPDIR/go-bin/notchify                $out/Applications/Notchify.app/Contents/MacOS/notchify
           cp $TMPDIR/build/release/notchify-recipes $out/Applications/Notchify.app/Contents/MacOS/notchify-recipes
           cp Resources/Info.plist                   $out/Applications/Notchify.app/Contents/Info.plist
           # Recipe data: notchify-recipes looks under
