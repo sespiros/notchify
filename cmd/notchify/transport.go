@@ -42,6 +42,22 @@ func sendUnix(data []byte, path string) error {
 	return err
 }
 
+// tcpDrainDelay returns how long sendTCP should hold the connection
+// open after writing the payload, before closing.
+//
+// Why: the agentbox host-guest TCP relay (Gondolin tcp-map, similar
+// proxies that translate a guest port to the host's loopback) needs
+// the guest-side socket to stay open briefly so the relay finishes
+// forwarding bytes to the host before the FIN propagates. Without
+// this wait, the guest's write-then-immediate-close races the relay
+// and the host daemon silently receives nothing. The prior Python
+// shim used a 1s wait that we know works on the current Gondolin
+// path, so we mirror that as the default. Local Unix-socket sends do
+// not pay this cost; only TCP fallback callers do.
+//
+// Override via NOTCHIFY_TCP_DRAIN_DELAY (Go duration string, e.g.
+// "200ms", "0s") to tune for a transport that doesn't need the
+// drain. Negative values clamp to zero.
 func tcpDrainDelay() time.Duration {
 	value := os.Getenv("NOTCHIFY_TCP_DRAIN_DELAY")
 	if value == "" {
@@ -76,6 +92,8 @@ func sendTCP(data []byte) error {
 	if _, err := conn.Write(data); err != nil {
 		return err
 	}
+	// Keep the socket open briefly before the deferred Close so the
+	// host-side TCP relay finishes forwarding. See tcpDrainDelay.
 	time.Sleep(tcpDrainDelay())
 	return nil
 }
