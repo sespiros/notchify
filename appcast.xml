@@ -175,5 +175,39 @@ the user hovered it back open.</li>
 <p><a href="https://github.com/sespiros/notchify/compare/v0.6.3...v0.7.0">compare v0.6.3...v0.7.0</a></p>]]></description>
             <enclosure url="https://github.com/sespiros/notchify/releases/download/v0.7.0/Notchify-0.7.0.dmg" sparkle:edSignature="gPhOVQ7RSRr55L8/uLeaFx6uONQTOXVvdlqOOIexYjK9Le3w2UaCv7Ins1Bv4COZueE0RqxdleR0JogExgXTAg==" length="1971861" type="application/octet-stream"/>
         </item>
+        <item>
+            <title>v0.7.1</title>
+            <pubDate>Sun, 24 May 2026 19:57:30 +0000</pubDate>
+            <sparkle:version>0.7.1</sparkle:version>
+            <sparkle:shortVersionString>0.7.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<p>v0.7.1 is mostly an internal refactor, with a few user-visible additions for Linux sandbox / VM callers.</p>
+<h2>✨ New features</h2>
+<h3>🐧 Linux CLI artifact</h3>
+<p><code class="notranslate">notchify-0.7.1-linux-arm64</code> is attached to this release.<br>
+Static, CGO-free Go binary for callers running inside Linux VMs (Lima, Tart, agentbox).<br>
+Drop it on <code class="notranslate">PATH</code> inside your VM and call <code class="notranslate">notchify</code> exactly as on macOS; the binary talks to the host daemon over loopback TCP (configure with <code class="notranslate">NOTCHIFY_TCP_HOST</code> / <code class="notranslate">NOTCHIFY_TCP_PORT</code>).</p>
+<h3>🛰️ TCP-sourced <code class="notranslate">--focus</code> works end to end</h3>
+<p>Previously the daemon's TCP listener stripped focus information because the wire carried CLI-built shell strings that were unsafe to honor from a remote source.<br>
+Focus resolution moved to the daemon, so structured focus context now flows over TCP and the daemon composes the click shell at click time on its own terms.</p>
+<h3>🎨 <code class="notranslate">--icon integration:&lt;recipe&gt;/&lt;variant&gt;</code> spec</h3>
+<p>Recipe hooks reference icons by a URI form the daemon resolves against the bundled .app, so callers (including VM guests) no longer need filesystem access to host-side icon paths.<br>
+Existing <code class="notranslate">--icon /path/to/file.png</code> and SF Symbol names still work unchanged.</p>
+<h3>🪧 <code class="notranslate">NOTCHIFY_CONTEXT_NAME</code> / <code class="notranslate">NOTCHIFY_CONTEXT_REPO</code></h3>
+<p>Sandbox launchers set these env vars to flow a session label (display name, repo) into the notification title without each recipe knowing about the launcher.</p>
+<h2>🧹 Removed / changed</h2>
+<ul>
+<li><strong>Swift <code class="notranslate">notchify</code> CLI is gone, replaced by a Go rewrite.</strong> Same flag surface, same JSON wire shape, same exit codes and stderr messages. Agent recipes and shell hooks need no adjustment.</li>
+<li><strong>Recipes no longer install icons to <code class="notranslate">~/.config/&lt;agent&gt;/icons/</code>.</strong> Icons now live inside the .app and resolve via the <code class="notranslate">integration:</code> URI. Existing installs have orphaned icon files; safe to <code class="notranslate">rm -rf ~/.config/{claude,codex,pi}/icons/</code> after upgrading.</li>
+</ul>
+<h2>🔧 Internal</h2>
+<ul>
+<li><strong>Focus action resolution moved from CLI to daemon.</strong> The CLI ships only structured source context (bundle, tmux pane/socket, tty); the daemon's <code class="notranslate">FocusActionBuilder</code> composes the click shell at click time. Wire field renamed <code class="notranslate">dismissKey</code> → <code class="notranslate">focus</code>; the decoder still accepts the legacy name.</li>
+<li><strong>Recipe versions bumped</strong> (claude-code v12, codex v13, pi v4) so the Integrations menu surfaces the icon and title-context changes via its update flow.</li>
+</ul>
+<h2>Full changelog</h2>
+<p><a href="https://github.com/sespiros/notchify/compare/v0.7.0...v0.7.1">compare v0.7.0...v0.7.1</a></p>]]></description>
+            <enclosure url="https://github.com/sespiros/notchify/releases/download/v0.7.1/Notchify-0.7.1.dmg" sparkle:edSignature="jSHzz7+G9jihiSwB/+ivUecYlU2Apq9ZfnPLsaxaDY/67618HhY5XPu4jngsJ19rtLslxy7jxoys6E/cEV/zCA==" length="2923986" type="application/octet-stream"/>
+        </item>
     </channel>
 </rss>
