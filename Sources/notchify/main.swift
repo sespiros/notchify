@@ -59,7 +59,7 @@ if args.first == "--daemon" {
         let type = "command"
         let command = "quit"
     }
-    try sendToDaemon(try JSONEncoder().encode(CommandPayload()))
+    try sendToDaemon(try JSONEncoder().encode(CommandPayload()), allowTCPFallback: false)
     exit(0)
 }
 
@@ -149,12 +149,23 @@ let payload = Payload(
 )
 let data = try JSONEncoder().encode(payload)
 
-try sendToDaemon(data)
+try sendToDaemon(data, allowTCPFallback: true)
 
-func sendToDaemon(_ data: Data) throws {
+func sendToDaemon(_ data: Data, allowTCPFallback: Bool) throws {
     let path = "/tmp/notchify.sock"
+    if sendToUnixSocket(data, path: path) {
+        return
+    }
+    if allowTCPFallback, sendToTcpListener(data) {
+        return
+    }
+    fputs("connect(\(path)) failed: is notchify-daemon running?\n", stderr)
+    exit(1)
+}
+
+func sendToUnixSocket(_ data: Data, path: String) -> Bool {
     let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-    guard fd >= 0 else { fputs("socket() failed\n", stderr); exit(1) }
+    guard fd >= 0 else { return false }
     defer { close(fd) }
 
     var addr = sockaddr_un()
@@ -171,10 +182,48 @@ func sendToDaemon(_ data: Data) throws {
         }
     }
     guard connectOK == 0 else {
-        fputs("connect(\(path)) failed: is notchify-daemon running?\n", stderr)
-        exit(1)
+        return false
     }
     data.withUnsafeBytes { buf in
         _ = write(fd, buf.baseAddress, data.count)
     }
+    return true
+}
+
+func sendToTcpListener(_ data: Data) -> Bool {
+    let env = ProcessInfo.processInfo.environment
+    let host = env["NOTCHIFY_TCP_HOST"].flatMap { $0.isEmpty ? nil : $0 } ?? "127.0.0.1"
+    let port = env["NOTCHIFY_TCP_PORT"].flatMap(UInt16.init) ?? 43187
+    var hints = addrinfo(
+        ai_flags: 0,
+        ai_family: AF_INET,
+        ai_socktype: SOCK_STREAM,
+        ai_protocol: IPPROTO_TCP,
+        ai_addrlen: 0,
+        ai_canonname: nil,
+        ai_addr: nil,
+        ai_next: nil
+    )
+    var result: UnsafeMutablePointer<addrinfo>?
+    guard getaddrinfo(host, String(port), &hints, &result) == 0, let first = result else {
+        return false
+    }
+    defer { freeaddrinfo(first) }
+
+    var cursor: UnsafeMutablePointer<addrinfo>? = first
+    while let info = cursor {
+        defer { cursor = info.pointee.ai_next }
+        let fd = socket(info.pointee.ai_family, info.pointee.ai_socktype, info.pointee.ai_protocol)
+        guard fd >= 0 else { continue }
+        let connected = connect(fd, info.pointee.ai_addr, info.pointee.ai_addrlen) == 0
+        if connected {
+            data.withUnsafeBytes { buf in
+                _ = write(fd, buf.baseAddress, data.count)
+            }
+            close(fd)
+            return true
+        }
+        close(fd)
+    }
+    return false
 }

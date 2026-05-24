@@ -39,6 +39,12 @@ Positional args are `<title> [body]`, mirroring Linux's `notify-send`.
 Set `NOTCHIFY_TERMINAL_BUNDLE` to override the detection
 (e.g. `NOTCHIFY_TERMINAL_BUNDLE=com.github.wez.wezterm`).
 
+## Loopback TCP listener
+
+For VM-to-host delivery, the menubar menu can enable a loopback TCP
+listener. It defaults to `127.0.0.1:43187`; override with
+`NOTCHIFY_TCP_LISTEN=host:port`.
+
 ## Motivation
 
 Built for **ephemeral** notifications, the kind you might want from

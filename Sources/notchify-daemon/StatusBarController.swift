@@ -11,14 +11,25 @@ final class StatusBarController: NSObject {
     private let installCLIItem = NSMenuItem(
         title: "Install CLI in /usr/local/bin", action: nil, keyEquivalent: ""
     )
+    private let tcpListenerItem = NSMenuItem(
+        title: "Loopback TCP Listener", action: nil, keyEquivalent: ""
+    )
     private let focusBehaviorMenu = NSMenu()
     private let integrations = IntegrationsMenu()
     private let updater: Updater?
+    private let tcpState: () -> (enabled: Bool, detail: String)
+    private let setTcpEnabled: (Bool) -> Void
     private var badgeView: NSView?
     private var refreshTimer: Timer?
 
-    init(updater: Updater?) {
+    init(
+        updater: Updater?,
+        tcpState: @escaping () -> (enabled: Bool, detail: String),
+        setTcpEnabled: @escaping (Bool) -> Void
+    ) {
         self.updater = updater
+        self.tcpState = tcpState
+        self.setTcpEnabled = setTcpEnabled
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
 
@@ -79,6 +90,10 @@ final class StatusBarController: NSObject {
         installCLIItem.target = self
         menu.addItem(installCLIItem)
 
+        tcpListenerItem.action = #selector(toggleTcpListener)
+        tcpListenerItem.target = self
+        menu.addItem(tcpListenerItem)
+
         let focusBehaviorItem = NSMenuItem(title: "Focus Behavior", action: nil, keyEquivalent: "")
         focusBehaviorItem.submenu = focusBehaviorMenu
         for policy in FocusPolicy.allCases {
@@ -117,6 +132,7 @@ final class StatusBarController: NSObject {
 
         refreshLaunchAtLoginState()
         refreshCLIState()
+        refreshTcpListenerState()
         refreshFocusPolicyState()
     }
 
@@ -180,6 +196,17 @@ final class StatusBarController: NSObject {
             ? "CLI installed at \(prefix!)"
             : "Install CLI in /usr/local/bin"
         installCLIItem.action = installed ? nil : #selector(installCLI)
+    }
+
+    @objc private func toggleTcpListener() {
+        setTcpEnabled(!tcpState().enabled)
+        refreshTcpListenerState()
+    }
+
+    func refreshTcpListenerState() {
+        let state = tcpState()
+        tcpListenerItem.state = state.enabled ? .on : .off
+        tcpListenerItem.title = "Loopback TCP Listener: \(state.detail)"
     }
 
     @objc private func setFocusPolicy(_ sender: NSMenuItem) {

@@ -45,6 +45,7 @@ Sections (run one at a time):
   edge        race conditions: mid-slide, mid-retract, click-dismiss
   focus       --focus drop-if-focused and focus-on-return dismiss
   image       custom file-path icon (PNG + animated webp)
+  tcp         send a raw JSON payload to the loopback TCP listener
   all         run every section sequentially (mostly not unattended)
 EOF
 }
@@ -320,6 +321,16 @@ if run_section image; then
     "$N" "Animated webp" "ai.webp from giphy" \
          --group image-webp --icon "$SCRIPT_DIR/test-assets/ai.webp" --timeout 0
     sleep 8
+fi
+
+# --- Loopback TCP listener ---------------------------------------
+
+if run_section tcp; then
+    echo "[tcp] raw JSON over loopback listener"
+
+    printf '%s' '{"title":"tcp smoke","text":"from loopback","sound":"ready","group":"notchify:tcp"}' \
+        | nc 127.0.0.1 43187
+    sleep 6
 fi
 
 echo "test done."
