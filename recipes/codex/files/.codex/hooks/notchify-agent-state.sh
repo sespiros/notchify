@@ -154,7 +154,11 @@ fi
 echo "$now" > "$stamp"
 
 title="codex"
-if [ -n "${TMUX_PANE:-}" ] && command -v tmux >/dev/null 2>&1; then
+if [ -n "${NOTCHIFY_CONTEXT_NAME:-}" ]; then
+    title="codex $NOTCHIFY_CONTEXT_NAME"
+elif [ -n "${NOTCHIFY_CONTEXT_REPO:-}" ]; then
+    title="codex $NOTCHIFY_CONTEXT_REPO"
+elif [ -n "${TMUX_PANE:-}" ] && command -v tmux >/dev/null 2>&1; then
     loc=$(tmux display-message -pt "$TMUX_PANE" '#{session_name}:#{window_name}' 2>/dev/null || echo "")
     [ -n "$loc" ] && title="codex $loc"
 fi

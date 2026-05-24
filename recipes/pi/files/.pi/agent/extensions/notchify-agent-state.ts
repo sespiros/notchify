@@ -43,10 +43,18 @@ export default function (pi: ExtensionAPI) {
 }
 
 function buildTitle(): string {
-  // With tmux, qualify "pi" with session:window so the user can
-  // tell concurrent sessions apart; without tmux, fall back to bare
-  // "pi".
-  let title = "pi";
+  const contextName = process.env.NOTCHIFY_CONTEXT_NAME;
+  if (contextName && contextName.length > 0) {
+    return `pi ${contextName}`;
+  }
+
+  const contextRepo = process.env.NOTCHIFY_CONTEXT_REPO;
+  if (contextRepo && contextRepo.length > 0) {
+    return `pi ${contextRepo}`;
+  }
+
+  // Outside sandboxes, qualify "pi" with tmux session:window so the
+  // user can tell concurrent local sessions apart.
   const tmuxPane = process.env.TMUX_PANE;
   if (tmuxPane && tmuxPane.length > 0) {
     const result = spawnSync(
@@ -57,9 +65,9 @@ function buildTitle(): string {
     if (result.status === 0) {
       const loc = result.stdout?.replace(/\n$/, "").trim();
       if (loc && loc.length > 0) {
-        title = `pi ${loc}`;
+        return `pi ${loc}`;
       }
     }
   }
-  return title;
+  return "pi";
 }

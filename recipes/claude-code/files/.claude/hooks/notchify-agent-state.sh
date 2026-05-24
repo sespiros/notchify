@@ -126,18 +126,22 @@ print(out[:60])
 PY
 }
 
-# Build the default title. With tmux, qualify "claude" with
-# session:window so the user can tell concurrent sessions apart;
-# without tmux, fall back to a bare "claude". Either way, a
-# /rename custom title from the transcript wins if present.
+# Build the default title. Claude's transcript title wins when present;
+# otherwise sandbox launchers may supply a compact display name. Outside
+# sandboxes, tmux still qualifies "claude" with session:window.
+transcript=$(printf %s "$payload" | sed -n 's/.*"transcript_path":"\([^"]*\)".*/\1/p')
+custom=$(extract_session_title "$transcript")
 title="claude"
-if [ -n "${TMUX_PANE:-}" ] && command -v tmux >/dev/null 2>&1; then
+if [ -n "$custom" ]; then
+    title="$custom"
+elif [ -n "${NOTCHIFY_CONTEXT_NAME:-}" ]; then
+    title="claude $NOTCHIFY_CONTEXT_NAME"
+elif [ -n "${NOTCHIFY_CONTEXT_REPO:-}" ]; then
+    title="claude $NOTCHIFY_CONTEXT_REPO"
+elif [ -n "${TMUX_PANE:-}" ] && command -v tmux >/dev/null 2>&1; then
     loc=$(tmux display-message -pt "$TMUX_PANE" '#{session_name}:#{window_name}' 2>/dev/null || echo "")
     [ -n "$loc" ] && title="claude $loc"
 fi
-transcript=$(printf %s "$payload" | sed -n 's/.*"transcript_path":"\([^"]*\)".*/\1/p')
-custom=$(extract_session_title "$transcript")
-[ -n "$custom" ] && title="$custom"
 
 # Group key is constant per agent + state, so every claude pane's
 # notifications coalesce into one chip stack regardless of tmux pane,
