@@ -123,7 +123,11 @@ enum FocusDetector {
         return r.stdout?.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private static func resolveTmuxBinary() -> String? {
+    /// Internal (not private) so click-time action builders under
+    /// `Focus/` can share the same probe order. Daemon-spawned shells
+    /// inherit launchd's minimal PATH, so any tmux invocation needs an
+    /// absolute path baked in by the daemon at click time.
+    static func resolveTmuxBinary() -> String? {
         // Daemons launched via launchd inherit a minimal PATH that
         // doesn't include Homebrew or Nix prefixes, so a plain
         // `command -v tmux` often finds nothing. Probe the usual

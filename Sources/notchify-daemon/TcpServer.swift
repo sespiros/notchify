@@ -120,6 +120,13 @@ final class TcpServer {
             return
         }
 
+        // Strip the raw `action` field: TCP is an untrusted boundary
+        // (loopback-only today, but the principle stands), and `action`
+        // carries a shell string that the daemon would `sh -c` on click.
+        // Keep `focus`: it's structured data (bundle/tmux pane/tty),
+        // not executable code. The daemon resolves it into a safe shell
+        // action at click time via FocusActionBuilder, with proper
+        // shell quoting on the values it embeds.
         let sanitized = Message(
             title: msg.title,
             text: msg.text,
@@ -129,7 +136,7 @@ final class TcpServer {
             action: nil,
             timeout: msg.timeout,
             group: msg.group,
-            dismissKey: nil
+            focus: msg.focus
         )
         DispatchQueue.main.async { self.onMessage?(sanitized) }
     }

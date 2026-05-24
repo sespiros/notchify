@@ -55,7 +55,7 @@ final class NotchController {
     private var teardownTask: Task<Void, Never>?
     /// 1 Hz poll that auto-dismisses `--focus` notifications once the
     /// user visits their source. Runs only while there are
-    /// dismissKey-bearing rows in the stacks.
+    /// focus-key-bearing rows in the stacks.
     private var focusTimer: Timer?
     /// Low-frequency poll for macOS Focus / DND so the notch can
     /// show a muted indicator even before a notification arrives.
@@ -445,15 +445,15 @@ final class NotchController {
     }
 
     private func shouldSuppressForCurrentFocus(_ message: Message) -> Bool {
-        guard let key = message.dismissKey else { return false }
+        guard let key = message.focus else { return false }
         return FocusDetector.matches(key, snapshot: .capture())
     }
 
     /// Start/stop the focus poll based on whether any notification in
-    /// the current stacks carries a dismissKey. Idempotent.
+    /// the current stacks carries a focus key. Idempotent.
     private func updateFocusTimer() {
         let needsPoll = chipstacks.values.contains { stack in
-            stack.notifications.contains { $0.message.dismissKey != nil }
+            stack.notifications.contains { $0.message.focus != nil }
         }
         if needsPoll {
             if focusTimer == nil {
@@ -470,7 +470,7 @@ final class NotchController {
         }
     }
 
-    /// One tick of the focus poll: dismiss any rows whose dismissKey
+    /// One tick of the focus poll: dismiss any rows whose focus key
     /// matches what the user is currently looking at.
     private func checkFocus() {
         // FocusSnapshot caches expensive probes (tmux subprocess,
@@ -482,7 +482,7 @@ final class NotchController {
         for chipstackID in chipstackOrder {
             guard let stack = chipstacks[chipstackID] else { continue }
             for n in stack.notifications {
-                if let key = n.message.dismissKey,
+                if let key = n.message.focus,
                    FocusDetector.matches(key, snapshot: snapshot) {
                     toDismiss.append(n)
                 }
@@ -617,7 +617,7 @@ final class NotchController {
     }
 
     private func handleClick(_ n: StoredNotification) {
-        runAction(n.message.action)
+        runAction(forClickOf: n.message)
         beginRetraction(of: n, viaClick: true)
     }
 
@@ -678,7 +678,7 @@ final class NotchController {
     /// only when the live stack is now empty).
     private func handleChipClick(_ chipstackID: String) {
         guard let top = chipstacks[chipstackID]?.notifications.first else { return }
-        runAction(top.message.action)
+        runAction(forClickOf: top.message)
         if model.liveStack.contains(where: { $0.id == top.id }) {
             beginRetraction(of: top, viaClick: true)
             return
@@ -711,7 +711,7 @@ final class NotchController {
     /// in-flight: removes that single row from its stack (collapsing
     /// the slot if it was the last), runs its action.
     private func handleRowClick(_ n: StoredNotification) {
-        runAction(n.message.action)
+        runAction(forClickOf: n.message)
         let willEmptyEverything = (chipstacks.count == 1)
             && (chipstacks[n.chipstackID]?.notifications.count ?? 0) <= 1
             && model.liveStack.isEmpty
@@ -730,14 +730,14 @@ final class NotchController {
     }
 
     private func handleMutedRowClick(_ n: StoredNotification) {
-        runAction(n.message.action)
+        runAction(forClickOf: n.message)
         removeFocusMutedNotification(n)
     }
 
     private func handleMutedChipClick(_ chipstackID: String) {
         guard let stack = model.focusMutedPreviewChipstacks.first(where: { $0.id == chipstackID }),
               let top = stack.notifications.first else { return }
-        runAction(top.message.action)
+        runAction(forClickOf: top.message)
         removeFocusMutedNotification(top)
     }
 
@@ -918,8 +918,21 @@ final class NotchController {
         }
     }
 
-    private func runAction(_ action: String?) {
-        guard let action, !action.isEmpty else { return }
+    /// Resolve the click-time shell/url action for a notification.
+    /// Precedence:
+    ///   1. Explicit `message.action` (set when the caller used
+    ///      `--action <url|cmd>`). Treated verbatim.
+    ///   2. `message.focus` (set by `--focus`). Daemon-side builders
+    ///      assemble a shell command from the structured source data
+    ///      at click time (see `FocusActionBuilder`).
+    private func clickAction(for message: Message) -> String? {
+        if let action = message.action, !action.isEmpty { return action }
+        guard let focus = message.focus else { return nil }
+        return FocusActionBuilder.build(for: focus)
+    }
+
+    private func runAction(forClickOf message: Message) {
+        guard let action = clickAction(for: message), !action.isEmpty else { return }
         if let url = URL(string: action), let scheme = url.scheme, !scheme.isEmpty {
             NSWorkspace.shared.open(url)
             return
