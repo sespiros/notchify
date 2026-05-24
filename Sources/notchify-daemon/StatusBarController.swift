@@ -14,6 +14,7 @@ final class StatusBarController: NSObject {
     private let tcpListenerItem = NSMenuItem(
         title: "Loopback TCP Listener", action: nil, keyEquivalent: ""
     )
+    private let settingsMenu = NSMenu(title: "Settings")
     private let focusBehaviorMenu = NSMenu()
     private let integrations = IntegrationsMenu()
     private let updater: Updater?
@@ -82,17 +83,25 @@ final class StatusBarController: NSObject {
 
         menu.addItem(.separator())
 
+        menu.addItem(integrations.rootItem)
+
+        let settingsItem = NSMenuItem(title: "Settings", action: nil, keyEquivalent: "")
+        settingsItem.submenu = settingsMenu
+        menu.addItem(settingsItem)
+
         launchAtLoginItem.action = #selector(toggleLaunchAtLogin)
         launchAtLoginItem.target = self
-        menu.addItem(launchAtLoginItem)
+        settingsMenu.addItem(launchAtLoginItem)
 
         installCLIItem.action = #selector(installCLI)
         installCLIItem.target = self
-        menu.addItem(installCLIItem)
+        settingsMenu.addItem(installCLIItem)
 
         tcpListenerItem.action = #selector(toggleTcpListener)
         tcpListenerItem.target = self
-        menu.addItem(tcpListenerItem)
+        settingsMenu.addItem(tcpListenerItem)
+
+        settingsMenu.addItem(.separator())
 
         let focusBehaviorItem = NSMenuItem(title: "Focus Behavior", action: nil, keyEquivalent: "")
         focusBehaviorItem.submenu = focusBehaviorMenu
@@ -106,9 +115,7 @@ final class StatusBarController: NSObject {
             item.representedObject = policy.rawValue
             focusBehaviorMenu.addItem(item)
         }
-        menu.addItem(focusBehaviorItem)
-
-        menu.addItem(integrations.rootItem)
+        settingsMenu.addItem(focusBehaviorItem)
 
         menu.addItem(.separator())
 
