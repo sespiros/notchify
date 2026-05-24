@@ -657,10 +657,15 @@ struct NotchPillView: View {
         return icons + gaps + shelfPaddingLeft + shelfPaddingRight
     }
 
-    /// Render an icon spec as an Image. The spec is either an SF
-    /// Symbol name (e.g. "bell.fill") or a file path (starts with "/"
-    /// or "~"). For SF Symbols, the tint comes from `colorName`; for
-    /// image files, color is ignored (the file paints itself).
+    /// Render an icon spec as an Image. The spec is one of:
+    ///   - SF Symbol name (e.g. "bell.fill"): tinted by `colorName`.
+    ///   - Absolute or tilde-prefixed file path: loaded from disk.
+    ///   - `integration:<recipe>/<variant>`: resolved to a PNG bundled
+    ///     inside the .app under `Contents/Resources/integrations/`.
+    ///     Lets recipe hooks (e.g. claude-code, codex, pi) reference
+    ///     their icons without depending on host-side `~/.config`
+    ///     locations being readable by the caller (matters for VM
+    ///     sandboxes).
     @ViewBuilder
     static func iconImage(
         _ spec: String?,
@@ -668,7 +673,10 @@ struct NotchPillView: View {
         size: CGFloat
     ) -> some View {
         let resolved = spec ?? "bell.fill"
-        if isFilePath(resolved) {
+        if let path = resolveIntegrationIcon(resolved) {
+            AnimatedImage(path: path)
+                .frame(width: size, height: size)
+        } else if isFilePath(resolved) {
             // Use AnimatedImage so animated GIF / WebP icons play
             // their frames; static images render as a single frame
             // at the same code path.
@@ -689,6 +697,49 @@ struct NotchPillView: View {
 
     private static func expandTilde(_ s: String) -> String {
         return (s as NSString).expandingTildeInPath
+    }
+
+    /// Resolve `integration:<recipe>/<variant>` to the bundled PNG
+    /// shipped with the recipe (`recipes/<recipe>/icons/<variant>.png`),
+    /// or nil if the spec isn't an integration URI or the file is
+    /// missing. Missing files return nil rather than throwing so the
+    /// caller falls through to its default-icon path.
+    ///
+    /// Recipes are bundled at `Contents/share/notchify/recipes/` in
+    /// the .app (see scripts/package.sh + flake.nix), and live in
+    /// repo root during a plain `swift build`. We resolve relative to
+    /// the daemon binary so both layouts work without code change.
+    private static func resolveIntegrationIcon(_ spec: String) -> String? {
+        let prefix = "integration:"
+        guard spec.hasPrefix(prefix) else { return nil }
+        let body = String(spec.dropFirst(prefix.count))
+        guard let slash = body.firstIndex(of: "/") else { return nil }
+        let recipe = String(body[..<slash])
+        let variant = String(body[body.index(after: slash)...])
+        guard !recipe.isEmpty, !variant.isEmpty else { return nil }
+        // Reject path traversal: recipe and variant must be single
+        // filename components, no slashes or `..` allowed.
+        if recipe.contains("/") || recipe.contains("..") { return nil }
+        if variant.contains("/") || variant.contains("..") { return nil }
+
+        let exe = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
+        let bin = exe.deletingLastPathComponent()
+        let candidates = [
+            // .app bundle: Contents/MacOS -> Contents/share/notchify/recipes
+            bin.appendingPathComponent("../share/notchify/recipes/\(recipe)/icons/\(variant).png").standardized,
+            // Plain swift build: .build/debug -> repo/recipes
+            bin.appendingPathComponent("../../recipes/\(recipe)/icons/\(variant).png").standardized,
+            // swift run on Apple silicon: the user-visible
+            // .build/debug/notchify-daemon symlinks to
+            // .build/arm64-apple-macosx/debug/notchify-daemon, which
+            // is one directory deeper relative to repo/recipes.
+            bin.appendingPathComponent("../../../recipes/\(recipe)/icons/\(variant).png").standardized,
+        ]
+        let fm = FileManager.default
+        for url in candidates where fm.fileExists(atPath: url.path) {
+            return url.path
+        }
+        return nil
     }
 
     /// Map a string name to a SwiftUI Color. Shared by the slot

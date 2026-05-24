@@ -170,49 +170,39 @@ final class IntegrationsMenu: NSObject, NSMenuDelegate {
         slug.split(separator: "-").map { $0.prefix(1).uppercased() + $0.dropFirst() }.joined(separator: " ")
     }
 
-    // Load a template-friendly icon for the recipe's menu item. Looks
-    // under recipes/<name>/files/.config/*/icons/source.svg — a one-
-    // color SVG that we render as a template image so macOS tints it
-    // neutral (white in dark mode, black in light mode, system accent
-    // when highlighted). Falls back to done.png if SVG loading fails.
+    // Load a template-friendly icon for the recipe's menu item from
+    // `recipes/<name>/icons/`. Prefer the prebuilt done.png (768×768
+    // RGBA, clean single-color silhouette) over source.svg — NSImage's
+    // SVG renderer mishandles fill-rule="evenodd" on some recipes
+    // (codex's bird shape loses interior cutouts), which a baked PNG
+    // sidesteps. Marking the image as a template makes macOS treat
+    // the alpha channel as a mask and tint it neutral.
     //
-    // Recipe names and agent directory names need not match
-    // (`claude-code` recipe writes to `~/.config/claude/`), so we
-    // discover the agent dir by listing files/.config/ rather than
-    // hardcoding.
+    // The same recipes/<name>/icons/<variant>.png layout is what
+    // NotchPillView.resolveIntegrationIcon reads at notification time,
+    // keeping the menu icon and the click-time icon in lockstep.
     nonisolated private static func iconFor(_ name: String) -> NSImage? {
         let exe = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
         let bin = exe.deletingLastPathComponent()
         let roots = [
             // .app bundle: Contents/MacOS -> Contents/share/notchify/recipes
-            bin.appendingPathComponent("../share/notchify/recipes/\(name)/files/.config").standardized,
+            bin.appendingPathComponent("../share/notchify/recipes/\(name)/icons").standardized,
             // Plain swift build: .build/debug -> repo/recipes
-            bin.appendingPathComponent("../../recipes/\(name)/files/.config").standardized,
+            bin.appendingPathComponent("../../recipes/\(name)/icons").standardized,
             // swift run on Apple silicon: the user-visible
             // .build/debug/notchify-daemon symlinks to
             // .build/arm64-apple-macosx/debug/notchify-daemon, which
             // is one directory deeper relative to repo/recipes.
-            bin.appendingPathComponent("../../../recipes/\(name)/files/.config").standardized,
+            bin.appendingPathComponent("../../../recipes/\(name)/icons").standardized,
         ]
         let fm = FileManager.default
-        for root in roots {
-            guard let agents = try? fm.contentsOfDirectory(atPath: root.path) else { continue }
-            for agent in agents {
-                let dir = root.appendingPathComponent("\(agent)/icons")
-                // Prefer the prebuilt PNG (768×768 RGBA, already a
-                // clean single-color silhouette) over source.svg —
-                // NSImage's SVG renderer mishandles fill-rule="evenodd"
-                // on some recipes (codex's bird shape loses interior
-                // cutouts), which a baked PNG sidesteps. Marking the
-                // image as a template makes macOS treat the alpha
-                // channel as a mask and tint it neutral.
-                for filename in ["done.png", "source.svg"] {
-                    let path = dir.appendingPathComponent(filename)
-                    guard let img = NSImage(contentsOf: path) else { continue }
-                    img.size = NSSize(width: 16, height: 16)
-                    img.isTemplate = true
-                    return img
-                }
+        for root in roots where fm.fileExists(atPath: root.path) {
+            for filename in ["done.png", "source.svg"] {
+                let path = root.appendingPathComponent(filename)
+                guard let img = NSImage(contentsOf: path) else { continue }
+                img.size = NSSize(width: 16, height: 16)
+                img.isTemplate = true
+                return img
             }
         }
         return nil

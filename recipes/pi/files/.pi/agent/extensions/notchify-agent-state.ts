@@ -11,7 +11,6 @@ import { spawnSync } from "node:child_process";
 // (several tool-call rounds without user input) don't spam.
 
 const DEBOUNCE_SECS = 5;
-const HOME = process.env.HOME ?? "";
 
 export default function (pi: ExtensionAPI) {
   let lastFired: number | null = null;
@@ -26,7 +25,7 @@ export default function (pi: ExtensionAPI) {
     const title = buildTitle();
     const body = "done";
     const group = "pi:done";
-    const icon = `${HOME}/.config/pi/icons/done.png`;
+    const icon = "integration:pi/done";
 
     // Run synchronously: backgrounding reparents notchify to launchd,
     // breaking getppid()-based bundle detection used by --focus.

@@ -157,14 +157,14 @@ case "$state" in
         # terminal app, breaking --focus's click-action and dismiss-key
         # detection. notchify is sub-second; the hook can wait.
         if ! notchify "$title" "$body" --sound info \
-                      --icon "$HOME/.config/claude/icons/blocked.png" \
+                      --icon "integration:claude-code/blocked" \
                       --group "claude:blocked" --focus; then
             exit 0
         fi
         ;;
     idle)
         if ! notchify "$title" "done" --sound ready \
-                      --icon "$HOME/.config/claude/icons/done.png" \
+                      --icon "integration:claude-code/done" \
                       --group "claude:done" --focus; then
             exit 0
         fi

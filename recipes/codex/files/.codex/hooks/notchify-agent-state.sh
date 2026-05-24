@@ -170,14 +170,14 @@ case "$state" in
         # detection (getppid()=1) and so the --focus click-action
         # and dismiss-key. notchify is sub-second; we wait.
         if ! notchify "$title" "$blocked_body" --sound info \
-                      --icon "$HOME/.config/codex/icons/blocked.png" \
+                      --icon "integration:codex/blocked" \
                       --group "codex:blocked" --focus; then
             exit 0
         fi
         ;;
     idle)
         if ! notchify "$title" "done" --sound ready \
-                      --icon "$HOME/.config/codex/icons/done.png" \
+                      --icon "integration:codex/done" \
                       --group "codex:done" --focus; then
             exit 0
         fi
