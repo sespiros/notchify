@@ -1,6 +1,7 @@
 #!/bin/sh
-# Install the claude-code recipe: hook script + icons under $prefix,
-# and merge hook registrations into $prefix/.claude/settings.json.
+# Install the claude-code recipe: hook script under $prefix, and merge
+# hook registrations into $prefix/.claude/settings.json. (Icons ship in
+# the notchify app, referenced as integration:claude-code/<variant>.)
 set -eu
 
 NR_RECIPE_DIR="$(cd "$(dirname "$0")" && pwd)"

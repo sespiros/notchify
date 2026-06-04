@@ -1,5 +1,6 @@
 #!/bin/sh
-# Install the pi recipe: extension + icons under $prefix.
+# Install the pi recipe: the extension under $prefix. (Icons ship in
+# the notchify app, referenced as integration:pi/<variant>.)
 # Pi auto-discovers extensions from ~/.pi/agent/extensions/*.ts so no
 # config-file merging is needed (unlike Claude Code / Codex hooks).
 set -eu

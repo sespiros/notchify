@@ -1,6 +1,6 @@
 #!/bin/sh
-# Install the codex recipe: hook script + icons under $prefix, and
-# merge notchify hook registrations into $prefix/.codex/hooks.json
+# Install the codex recipe: hook script under $prefix, and merge
+# notchify hook registrations into $prefix/.codex/hooks.json
 # alongside whatever other entries already live there (e.g. a
 # tmux-statusline hook installed via dotfiles).
 set -eu

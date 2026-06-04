@@ -58,7 +58,6 @@ cat > "$TMP/.codex/hooks.json" <<'JSON'
 JSON
 "$BIN" install codex --prefix "$TMP" >/dev/null
 [ -x "$TMP/.codex/hooks/notchify-agent-state.sh" ] || fail "hook script not executable"
-[ -f "$TMP/.config/codex/icons/done.png" ] || fail "icon not installed"
 [ -f "$TMP/.config/notchify/installed/codex" ] || fail "install marker missing"
 statusline_count=$(jq '[.. | objects | select(.command? // "" | contains("tmux-statusline-state.sh"))] | length' "$TMP/.codex/hooks.json")
 notchify_count=$(jq '[.. | objects | select(.command? // "" | contains("notchify-agent-state.sh"))] | length' "$TMP/.codex/hooks.json")
@@ -158,6 +157,35 @@ HOME="$TMP" PATH="$TMP/bin:$PATH" sh "$TMP/.claude/hooks/notchify-agent-state.sh
 
 pass "hook scripts do not fail the agent when notchify is unavailable"
 
+echo "==> bell transport writes a pane-title marker without the CLI"
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+mkdir -p "$TMP/bin"
+cat > "$TMP/bin/notchify" <<SH
+#!/bin/sh
+printf '%s\n' "\$*" >> "$TMP/notchify.log"
+SH
+chmod 755 "$TMP/bin/notchify"
+# env -u clears any ambient tmux/context so the title is deterministic
+# ("claude"); otherwise a tmux session running the test leaks into it.
+"$BIN" install claude-code --prefix "$TMP" >/dev/null
+env -u TMUX -u TMUX_PANE -u NOTCHIFY_CONTEXT_NAME -u NOTCHIFY_CONTEXT_REPO \
+  HOME="$TMP" PATH="$TMP/bin:$PATH" TMPDIR="$TMP" \
+  NOTCHIFY_TRANSPORT=bell NOTCHIFY_BELL_TTY="$TMP/faketty" \
+  sh "$TMP/.claude/hooks/notchify-agent-state.sh" idle ||
+  fail "bell-mode hook returned nonzero"
+grep -q 'notchify|integration:claude-code/done|ready|claude:done|claude|done' "$TMP/faketty" ||
+  fail "bell marker not written to tty (or wrong fields)"
+[ -f "$TMP/notchify.log" ] && fail "bell mode must not invoke the notchify CLI" || true
+pass "bell transport emits marker, skips CLI"
+
+echo "==> bell transport is non-fatal when no tty is writable"
+env -u TMUX -u TMUX_PANE HOME="$TMP" PATH="$TMP/bin:$PATH" TMPDIR="$TMP" \
+  NOTCHIFY_TRANSPORT=bell NOTCHIFY_BELL_TTY="$TMP/nope/tty" \
+  sh "$TMP/.claude/hooks/notchify-agent-state.sh" idle ||
+  fail "bell-mode hook not non-fatal when tty is unwritable"
+pass "bell transport degrades quietly without a tty"
+
 echo "==> codex stop hook treats assistant handoff as blocked"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
@@ -171,7 +199,7 @@ chmod 755 "$TMP/bin/notchify"
 payload='{"hook_event_name":"Stop","last_assistant_message":"Your manual steps: create the user. Once you confirm 1-4 done and paste me the UID, I will continue."}'
 printf %s "$payload" | HOME="$TMP" PATH="$TMP/bin:$PATH" TMPDIR="$TMP" sh "$TMP/.codex/hooks/notchify-agent-state.sh" idle ||
   fail "codex stop hook failed while classifying input request"
-grep -q 'blocked.png' "$TMP/notchify.log" || fail "input-request stop did not use blocked notification"
+grep -q 'integration:codex/blocked' "$TMP/notchify.log" || fail "input-request stop did not use blocked notification"
 grep -q 'waiting for input' "$TMP/notchify.log" || fail "input-request stop missing waiting body"
 pass "assistant handoff becomes blocked notification"
 
@@ -189,7 +217,7 @@ payload='{"hook_event_name":"Stop","last_assistant_message":"What changed: Claud
 printf %s "$payload" | HOME="$TMP" PATH="$TMP/bin:$PATH" TMPDIR="$TMP" sh "$TMP/.codex/hooks/notchify-agent-state.sh" idle ||
   fail "codex stop hook failed on completion summary"
 grep -q 'done' "$TMP/notchify.log" || fail "completion summary did not produce done notification"
-! grep -q 'blocked.png' "$TMP/notchify.log" || fail "completion summary was misclassified as blocked"
+! grep -q 'integration:codex/blocked' "$TMP/notchify.log" || fail "completion summary was misclassified as blocked"
 pass "completion summary remains done notification"
 
 echo "==> codex permission hook notifies on approval wait"
@@ -205,23 +233,20 @@ chmod 755 "$TMP/bin/notchify"
 payload='{"hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"git commit -m fix"}}'
 printf %s "$payload" | HOME="$TMP" PATH="$TMP/bin:$PATH" TMPDIR="$TMP" sh "$TMP/.codex/hooks/notchify-agent-state.sh" blocked ||
   fail "codex permission hook failed"
-grep -q 'blocked.png' "$TMP/notchify.log" || fail "permission hook did not use blocked notification"
+grep -q 'integration:codex/blocked' "$TMP/notchify.log" || fail "permission hook did not use blocked notification"
 grep -q 'git commit -m fix' "$TMP/notchify.log" || fail "permission hook missing command body"
 pass "permission request becomes blocked notification"
 
-echo "==> pi install lays down extension and icons"
+echo "==> pi install lays down the extension"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 "$BIN" install pi --prefix "$TMP" >/dev/null
 [ -f "$TMP/.pi/agent/extensions/notchify-agent-state.ts" ] || fail "pi extension not installed"
-[ -f "$TMP/.config/pi/icons/done.png" ] || fail "pi done icon not installed"
-[ -f "$TMP/.config/pi/icons/blocked.png" ] || fail "pi blocked icon not installed"
 pass "pi files installed"
 
 echo "==> pi uninstall removes files"
 "$BIN" uninstall pi --prefix "$TMP" >/dev/null
 [ -e "$TMP/.pi/agent/extensions/notchify-agent-state.ts" ] && fail "pi extension not removed" || true
-[ -e "$TMP/.config/pi/icons/done.png" ] && fail "pi done icon not removed" || true
 pass "pi uninstall is surgical"
 
 echo "==> pi drift detection"
@@ -248,8 +273,12 @@ pass "pi extension has non-fatal guards"
 if command -v shellcheck >/dev/null 2>&1; then
     echo "==> shellcheck"
     shellcheck recipes/lib/install-common.sh \
+               recipes/remote-install.sh \
+               recipes/local/notchify-tmux-bell.sh \
                recipes/claude-code/install.sh recipes/claude-code/uninstall.sh \
+               recipes/claude-code/files/.claude/hooks/notchify-agent-state.sh \
                recipes/codex/install.sh recipes/codex/uninstall.sh \
+               recipes/codex/files/.codex/hooks/notchify-agent-state.sh \
                recipes/pi/install.sh recipes/pi/uninstall.sh \
                || fail "shellcheck reported issues"
     pass "shellcheck clean"

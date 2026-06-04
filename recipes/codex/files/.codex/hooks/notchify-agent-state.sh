@@ -14,7 +14,22 @@
 set -eu
 
 state="${1:-}"
-command -v notchify >/dev/null 2>&1 || exit 0
+
+# Transport: how the notification reaches the notch.
+#   direct (default) the notchify CLI talks to the local daemon
+#                    (Unix socket, or its loopback-TCP fallback).
+#   bell             for an agent on a remote host reached over
+#                    ssh+tmux with no daemon/tunnel: emit a terminal
+#                    bell carrying the label in the pane title, which a
+#                    local tmux alert-bell hook turns into a notch. See
+#                    recipes/local/notchify-tmux-bell.sh.
+#   auto             try the CLI, fall back to bell.
+NOTCHIFY_TRANSPORT="${NOTCHIFY_TRANSPORT:-direct}"
+
+# Only direct mode needs the CLI on PATH; bell mode just emits escapes.
+if [ "$NOTCHIFY_TRANSPORT" = direct ]; then
+    command -v notchify >/dev/null 2>&1 || exit 0
+fi
 
 case "$state" in
     idle|blocked) ;;
@@ -163,6 +178,82 @@ elif [ -n "${TMUX_PANE:-}" ] && command -v tmux >/dev/null 2>&1; then
     [ -n "$loc" ] && title="codex $loc"
 fi
 
+# --- bell transport --------------------------------------------------
+# nh_tty: terminal device to ring, or empty. Inside tmux it's the
+# pane's pts; otherwise walk up to the nearest ancestor with a real
+# controlling tty (the ssh session pts). NOTCHIFY_BELL_TTY overrides.
+nh_tty() {
+    if [ -n "${NOTCHIFY_BELL_TTY:-}" ]; then printf '%s\n' "$NOTCHIFY_BELL_TTY"; return 0; fi
+    if [ -n "${TMUX:-}" ] && [ -n "${TMUX_PANE:-}" ] && command -v tmux >/dev/null 2>&1; then
+        _p=$(tmux display -p -t "$TMUX_PANE" '#{pane_tty}' 2>/dev/null) || _p=""
+        [ -n "$_p" ] && { printf '%s\n' "$_p"; return 0; }
+    fi
+    _pid=${PPID:-0}
+    while [ -n "$_pid" ] && [ "$_pid" -gt 1 ]; do
+        _t=$(ps -o tty= -p "$_pid" 2>/dev/null | tr -d ' ')
+        case "$_t" in pts/*|tty*) printf '/dev/%s\n' "$_t"; return 0 ;; esac
+        _pid=$(ps -o ppid= -p "$_pid" 2>/dev/null | tr -d ' ')
+    done
+    return 1
+}
+
+# nh_bell <icon> <sound> <group> <title> <body>: set the pane title to
+# the marker "notchify|<icon>|<sound>|<group>|<title>|<body>"
+# (passthrough-wrapped inside tmux so it escapes even a background pane)
+# and ring the bell. A local tmux alert-bell hook reads the marker and
+# replays it as a local notchify, so icon/sound/group survive intact.
+# Returns nonzero if no tty was found.
+nh_bell() {
+    _bi=$(printf %s "${1:-}" | tr -d '\000-\037|')
+    _bs=$(printf %s "${2:-}" | tr -d '\000-\037|')
+    _bg=$(printf %s "${3:-}" | tr -d '\000-\037|')
+    _bt=$(printf %s "${4:-}" | tr -d '\000-\037|')
+    _bb=$(printf %s "${5:-}" | tr -d '\000-\037|')
+    _tty=$(nh_tty) || return 1
+    _m="notchify|$_bi|$_bs|$_bg|$_bt|$_bb"
+    # One write: set the pane title, then ring. A second redirect would
+    # truncate the tty and clobber the title before the terminal saw it,
+    # so the OSC and the BEL must land together, in order.
+    if [ -n "${TMUX:-}" ]; then
+        printf '\033Ptmux;\033\033]2;%s\007\033\134\a' "$_m" > "$_tty" 2>/dev/null
+    else
+        printf '\033]2;%s\007\a' "$_m" > "$_tty" 2>/dev/null
+    fi
+}
+
+# nh_deliver <title> <body> -- <notchify-args...>: send per
+# NOTCHIFY_TRANSPORT. Returns nonzero only when nothing could be sent
+# (caller treats that as non-fatal).
+nh_deliver() {
+    _title=$1; _body=$2; shift 2
+    [ "${1:-}" = -- ] && shift
+    # Pull --icon/--sound/--group for the bell marker without consuming
+    # "$@" (direct mode still needs the full arg vector); a for-loop
+    # state machine grabs the value following each flag.
+    _icon="" _sound="" _group="" _want=""
+    for _a in "$@"; do
+        case $_want in
+            icon)  _icon=$_a;  _want=""; continue ;;
+            sound) _sound=$_a; _want=""; continue ;;
+            group) _group=$_a; _want=""; continue ;;
+        esac
+        case $_a in
+            --icon)  _want=icon ;;
+            --sound) _want=sound ;;
+            --group) _want=group ;;
+        esac
+    done
+    case "$NOTCHIFY_TRANSPORT" in
+        bell) nh_bell "$_icon" "$_sound" "$_group" "$_title" "$_body" ;;
+        auto)
+            if command -v notchify >/dev/null 2>&1 && notchify "$_title" "$_body" "$@"; then
+                return 0
+            fi
+            nh_bell "$_icon" "$_sound" "$_group" "$_title" "$_body" ;;
+        *) notchify "$_title" "$_body" "$@" ;;
+    esac
+}
+
 # Group key is constant per agent + state, so every codex pane's
 # notifications coalesce into one chip stack regardless of tmux pane,
 # session, or window. The display title still carries the per-session
@@ -173,14 +264,14 @@ case "$state" in
         # launchd when the hook exits, breaking the CLI's bundle
         # detection (getppid()=1) and so the --focus click-action
         # and dismiss-key. notchify is sub-second; we wait.
-        if ! notchify "$title" "$blocked_body" --sound info \
+        if ! nh_deliver "$title" "$blocked_body" -- --sound info \
                       --icon "integration:codex/blocked" \
                       --group "codex:blocked" --focus; then
             exit 0
         fi
         ;;
     idle)
-        if ! notchify "$title" "done" --sound ready \
+        if ! nh_deliver "$title" "done" -- --sound ready \
                       --icon "integration:codex/done" \
                       --group "codex:done" --focus; then
             exit 0
