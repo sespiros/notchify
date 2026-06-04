@@ -16,20 +16,36 @@
 #
 #   set  -gw monitor-bell on
 #   set  -g  @notchify-bell "$HOME/.config/notchify/notchify-tmux-bell.sh"
-#   set-hook -g alert-bell 'run-shell -b "#{@notchify-bell} #{hook_pane}"'
+#   set-hook -g alert-bell 'run-shell -b "#{@notchify-bell} #{pane_id} #{q:pane_title}"'
+#
+# Use #{pane_id} (the belling pane), not #{hook_pane} -- the latter is empty
+# for alert-bell on some tmux builds, which drops the pane and misaligns the
+# args. #{q:pane_title} captures the marker at bell-fire time (while the title
+# is still ours); the script falls back to reading the live title only if $2
+# isn't supplied, which races a remote shell prompt redraw.
 #
 # Requires the notchify CLI on PATH locally (the same one the recipes
 # use). See recipes/README.md, "Remote agents over SSH".
 set -eu
 
-# Pane that belled (passed as #{hook_pane}); fall back to the active
+# Pane that belled (passed as #{pane_id}); fall back to the active
 # pane if tmux didn't supply one.
 pane="${1:-}"
 [ -n "$pane" ] || pane=$(tmux display -p '#{pane_id}' 2>/dev/null || true)
 
-title=""
-[ -n "$pane" ] && title=$(tmux display -p -t "$pane" '#{pane_title}' 2>/dev/null || true)
-[ -n "$title" ] || title=$(tmux display -p '#{pane_title}' 2>/dev/null || true)
+# Title: prefer the marker the tmux hook captured at bell-fire time and
+# passed as $2 (#{q:pane_title}); at that instant the title is still our
+# marker, before the remote shell prompt or the agent overwrites it. Only
+# re-read the live pane title (racy) when $2 wasn't supplied or isn't ours.
+title="${2:-}"
+case "$title" in
+    notchify\|*) ;;
+    *)
+        title=""
+        [ -n "$pane" ] && title=$(tmux display -p -t "$pane" '#{pane_title}' 2>/dev/null || true)
+        [ -n "$title" ] || title=$(tmux display -p '#{pane_title}' 2>/dev/null || true)
+        ;;
+esac
 
 # Only react to our marker; leave every other bell alone.
 case "$title" in

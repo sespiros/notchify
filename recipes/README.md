@@ -151,7 +151,7 @@ in the path.
 # ~/.tmux.conf (or ~/.byobu/.tmux.conf for byobu):
 set  -gw monitor-bell on
 set  -g  @notchify-bell "/path/to/notchify/recipes/local/notchify-tmux-bell.sh"
-set-hook -g alert-bell 'run-shell -b "#{@notchify-bell} #{hook_pane}"'
+set-hook -g alert-bell 'run-shell -b "#{@notchify-bell} #{pane_id} #{q:pane_title}"'
 ```
 
 ### Caveats
