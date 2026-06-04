@@ -136,7 +136,8 @@ final class TcpServer {
             action: nil,
             timeout: msg.timeout,
             group: msg.group,
-            focus: msg.focus
+            focus: msg.focus,
+            suppressWhenFocused: msg.suppressWhenFocused
         )
         DispatchQueue.main.async { self.onMessage?(sanitized) }
     }

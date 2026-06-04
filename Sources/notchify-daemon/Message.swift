@@ -23,10 +23,16 @@ struct Message: Codable {
     /// Decoded from either `focus` (new) or `dismissKey` (legacy) on
     /// the wire so old CLIs and new daemons interoperate cleanly.
     let focus: DismissKey?
+    /// nil/absent = suppress this at ingress when its source is already
+    /// focused (the usual "don't flash then retract" behavior). false
+    /// (set by the CLI's `--jump`) shows the arrival cue anyway, for
+    /// notifications whose real source pane is unreachable so every one
+    /// would otherwise be suppressed. Dismiss-on-return is unaffected.
+    let suppressWhenFocused: Bool?
 
     private enum CodingKeys: String, CodingKey {
         case title, text, icon, color, sound, action, timeout, group
-        case focus, dismissKey
+        case focus, dismissKey, suppressWhenFocused
     }
 
     init(
@@ -38,7 +44,8 @@ struct Message: Codable {
         action: String? = nil,
         timeout: Double? = nil,
         group: String? = nil,
-        focus: DismissKey? = nil
+        focus: DismissKey? = nil,
+        suppressWhenFocused: Bool? = nil
     ) {
         self.title = title
         self.text = text
@@ -49,6 +56,7 @@ struct Message: Codable {
         self.timeout = timeout
         self.group = group
         self.focus = focus
+        self.suppressWhenFocused = suppressWhenFocused
     }
 
     init(from decoder: Decoder) throws {
@@ -67,6 +75,7 @@ struct Message: Codable {
         } else {
             focus = try c.decodeIfPresent(DismissKey.self, forKey: .dismissKey)
         }
+        suppressWhenFocused = try c.decodeIfPresent(Bool.self, forKey: .suppressWhenFocused)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -80,5 +89,6 @@ struct Message: Codable {
         try c.encodeIfPresent(timeout, forKey: .timeout)
         try c.encodeIfPresent(group, forKey: .group)
         try c.encodeIfPresent(focus, forKey: .focus)
+        try c.encodeIfPresent(suppressWhenFocused, forKey: .suppressWhenFocused)
     }
 }

@@ -446,6 +446,12 @@ final class NotchController {
 
     private func shouldSuppressForCurrentFocus(_ message: Message) -> Bool {
         guard let key = message.focus else { return false }
+        // --jump notifications opt out of ingress suppression: their
+        // real source pane is unreachable (e.g. a remote agent funneled
+        // through one local ssh pane), so "you're already on the source"
+        // is true for every sibling and would eat every arrival cue.
+        // Dismiss-on-return (the 1 Hz poll) still applies to them.
+        if message.suppressWhenFocused == false { return false }
         return FocusDetector.matches(key, snapshot: .capture())
     }
 

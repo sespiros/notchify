@@ -29,6 +29,12 @@ const helpText = `usage: notchify <title> [body] [options]
   -a, --action <url|cmd>  URL opened or shell command run on click
   -f, --focus             raise source terminal / jump to tmux pane on click
                           (mutually exclusive with --action; implies --timeout 0)
+  -j, --jump              like --focus, but still shows the arrival cue even
+                          when you're already on the source pane (it only stops
+                          the at-ingress suppression; it still dismisses when
+                          you return). For remote agents funneled through one
+                          local pane, where that suppression would otherwise
+                          eat every sibling pane's cue.
   -t, --timeout <secs>    auto-dismiss after N seconds, 0 = persistent (default: 5)
   -g, --group <name>      stack notifications under a named chip;
                           icon/color come from the first arrival in the group
@@ -64,6 +70,10 @@ type payload struct {
 	Timeout *float64      `json:"timeout,omitempty"`
 	Group   *string       `json:"group,omitempty"`
 	Focus   *focusPayload `json:"focus,omitempty"`
+	// nil/absent = suppress at ingress when the source is already
+	// focused (current behavior); false = show the arrival cue anyway
+	// (set by --jump). Pointer so it's omitted unless --jump.
+	SuppressWhenFocused *bool `json:"suppressWhenFocused,omitempty"`
 }
 
 // Field names match the daemon's DismissKey struct (camelCase from
@@ -106,7 +116,7 @@ func main() {
 
 	var (
 		title, text, icon, color, sound, action, group string
-		focus                                          bool
+		focus, jump                                    bool
 		timeout                                        *float64
 		positionals                                    []string
 	)
@@ -142,6 +152,8 @@ func main() {
 			i++
 		case "-f", "--focus":
 			focus = true
+		case "-j", "--jump":
+			jump = true
 		case "-t", "--timeout":
 			if i >= len(args) {
 				usage()
@@ -184,34 +196,42 @@ func main() {
 	}
 
 	var focusBlock *focusPayload
-	if focus {
+	var suppressWhenFocused *bool
+	if focus || jump {
 		if action != "" {
-			fmt.Fprintln(os.Stderr, "notchify: --focus and --action are mutually exclusive")
+			fmt.Fprintln(os.Stderr, "notchify: --focus/--jump and --action are mutually exclusive")
 			os.Exit(2)
 		}
 		focusBlock = captureFocus()
 		if focusBlock == nil {
-			fmt.Fprintln(os.Stderr, "notchify: --focus requested but no terminal or tmux context detected; ignoring")
+			fmt.Fprintln(os.Stderr, "notchify: focus requested but no terminal or tmux context detected; ignoring")
 		}
-		// --focus implies persist: the notification keeps a row in its
-		// stack after the in-flight retracts, ready to be dismissed
+		// --focus/--jump imply persist: the notification keeps a row in
+		// its stack after the in-flight retracts, ready to be dismissed
 		// when the user visits the source.
 		if timeout == nil {
 			zero := 0.0
 			timeout = &zero
 		}
+		if jump {
+			// Opt out of the "already on the source, don't even flash
+			// it" ingress suppression; dismiss-on-return still applies.
+			no := false
+			suppressWhenFocused = &no
+		}
 	}
 
 	p := payload{
-		Title:   title,
-		Text:    optStr(text),
-		Icon:    optStr(icon),
-		Color:   optStr(color),
-		Sound:   optStr(sound),
-		Action:  optStr(action),
-		Timeout: timeout,
-		Group:   optStr(group),
-		Focus:   focusBlock,
+		Title:               title,
+		Text:                optStr(text),
+		Icon:                optStr(icon),
+		Color:               optStr(color),
+		Sound:               optStr(sound),
+		Action:              optStr(action),
+		Timeout:             timeout,
+		Group:               optStr(group),
+		Focus:               focusBlock,
+		SuppressWhenFocused: suppressWhenFocused,
 	}
 	data, err := json.Marshal(p)
 	if err != nil {
