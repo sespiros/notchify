@@ -44,6 +44,18 @@ cp Resources/Info.plist            "$APP/Contents/Info.plist"
 # the two aligned so we only have to bump one number per release.
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${VERSION}" "$APP/Contents/Info.plist"
 
+# Stamp a display-only dev marker (git short hash) when this isn't a
+# tagged release, so the About panel can show "<version>-<hash> (dev)".
+# This is a separate key only the About panel reads; the CFBundle*Version
+# keys above stay clean, so Sparkle still treats a dev build as the base
+# release and a newer published release supersedes (auto-updates) it.
+if ! git -C "$ROOT" describe --exact-match --tags HEAD >/dev/null 2>&1; then
+    DEV_HASH=$(git -C "$ROOT" rev-parse --short HEAD)
+    git -C "$ROOT" diff --quiet HEAD 2>/dev/null || DEV_HASH="${DEV_HASH}-dirty"
+    /usr/libexec/PlistBuddy -c "Add :NotchifyDevVersion string ${VERSION}-${DEV_HASH}" \
+        "$APP/Contents/Info.plist"
+fi
+
 # Bundle Sparkle.framework. The daemon binary links it via
 # @rpath/Sparkle.framework/... and SwiftPM only embeds a @loader_path
 # rpath, so we also add @executable_path/../Frameworks to find the

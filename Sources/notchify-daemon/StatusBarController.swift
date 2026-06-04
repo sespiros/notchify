@@ -144,7 +144,17 @@ final class StatusBarController: NSObject {
     }
 
     @objc private func about() {
-        NSApp.orderFrontStandardAboutPanel(nil)
+        // Dev builds carry a display-only NotchifyDevVersion (stamped by
+        // package.sh when built off a non-tagged commit); surface it as
+        // "Version <ver>-<hash> (dev)" so it's obvious this isn't a
+        // release. Release builds omit the key and get the clean version.
+        var options: [NSApplication.AboutPanelOptionKey: Any] = [:]
+        if let dev = Bundle.main.object(forInfoDictionaryKey: "NotchifyDevVersion") as? String,
+           !dev.isEmpty {
+            options[.applicationVersion] = dev
+            options[.version] = "dev"
+        }
+        NSApp.orderFrontStandardAboutPanel(options: options)
         NSApp.activate(ignoringOtherApps: true)
     }
 
