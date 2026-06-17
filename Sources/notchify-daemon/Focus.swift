@@ -8,16 +8,34 @@ enum FocusPolicy: String, CaseIterable {
     private static let defaultsKey = "FocusPolicy"
     static let didChangeNotification = Notification.Name("NotchifyFocusPolicyDidChange")
 
+    // Canonical bundle id of the shipped app; also the name of the
+    // preferences domain the policy is persisted in.
+    private static let suiteName = "cloud.seimenis.notchify"
+
+    // The policy must resolve to the same value for every build, not
+    // just the bundled .app. Unbundled daemons (`swift run`, tests)
+    // have no bundle id, so `UserDefaults.standard` targets a different
+    // domain that lacks the user's choice and silently falls back to
+    // the default, which is how Focus notifications leaked through when
+    // a dev build was running. Target the app's named domain directly.
+    // (UserDefaults rejects a suite name equal to the running bundle's
+    // own id, so the bundled app keeps using `.standard`, which already
+    // points at this same domain.)
+    private static var store: UserDefaults {
+        if Bundle.main.bundleIdentifier == suiteName { return .standard }
+        return UserDefaults(suiteName: suiteName) ?? .standard
+    }
+
     static var current: FocusPolicy {
         get {
-            guard let raw = UserDefaults.standard.string(forKey: defaultsKey),
+            guard let raw = store.string(forKey: defaultsKey),
                   let policy = FocusPolicy(rawValue: raw) else {
                 return .doNotDisturbOnly
             }
             return policy
         }
         set {
-            UserDefaults.standard.set(newValue.rawValue, forKey: defaultsKey)
+            store.set(newValue.rawValue, forKey: defaultsKey)
             NotificationCenter.default.post(name: didChangeNotification, object: nil)
         }
     }
