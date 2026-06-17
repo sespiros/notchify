@@ -16,6 +16,9 @@ final class StatusBarController: NSObject {
     )
     private let settingsMenu = NSMenu(title: "Settings")
     private let focusBehaviorMenu = NSMenu()
+    private let fdaCaptionItem = NSMenuItem(
+        title: "Needs Full Disk Access to read Focus", action: nil, keyEquivalent: ""
+    )
     private let integrations = IntegrationsMenu()
     private let updater: Updater?
     private let tcpState: () -> (enabled: Bool, detail: String)
@@ -105,16 +108,19 @@ final class StatusBarController: NSObject {
 
         let focusBehaviorItem = NSMenuItem(title: "Focus Behavior", action: nil, keyEquivalent: "")
         focusBehaviorItem.submenu = focusBehaviorMenu
-        for policy in FocusPolicy.allCases {
-            let item = NSMenuItem(
-                title: policy.title,
-                action: #selector(setFocusPolicy(_:)),
-                keyEquivalent: ""
-            )
-            item.target = self
-            item.representedObject = policy.rawValue
-            focusBehaviorMenu.addItem(item)
-        }
+        // Ignore needs no detection, so it sits alone above the divider.
+        // Both mute policies read the TCC-protected assertions file, so
+        // they're grouped below a Full Disk Access caption. The caption
+        // shows only when access is missing (toggled in
+        // refreshFocusPolicyState, re-evaluated on each open via the menu
+        // delegate); it has no action so the menu auto-disables it into a
+        // gray explanatory line above the options it qualifies.
+        focusBehaviorMenu.addItem(makeFocusPolicyItem(.ignore))
+        focusBehaviorMenu.addItem(.separator())
+        focusBehaviorMenu.addItem(fdaCaptionItem)
+        focusBehaviorMenu.addItem(makeFocusPolicyItem(.anyFocus))
+        focusBehaviorMenu.addItem(makeFocusPolicyItem(.doNotDisturbOnly))
+        focusBehaviorMenu.delegate = self
         settingsMenu.addItem(focusBehaviorItem)
 
         menu.addItem(.separator())
@@ -226,11 +232,36 @@ final class StatusBarController: NSObject {
         tcpListenerItem.title = "Loopback TCP Listener: \(state.detail)"
     }
 
+    private func makeFocusPolicyItem(_ policy: FocusPolicy) -> NSMenuItem {
+        let item = NSMenuItem(
+            title: policy.title,
+            action: #selector(setFocusPolicy(_:)),
+            keyEquivalent: ""
+        )
+        item.target = self
+        item.representedObject = policy.rawValue
+        return item
+    }
+
     @objc private func setFocusPolicy(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String,
               let policy = FocusPolicy(rawValue: raw) else { return }
         FocusPolicy.current = policy
         refreshFocusPolicyState()
+        // Picking a muting policy is the moment the user expresses intent
+        // to mute, so surface the FDA settings pane right then if access
+        // is missing (FDA can't be requested programmatically, only
+        // opened to). Ignore needs no file access, so it never prompts.
+        if policy != .ignore && !Focus.hasFullDiskAccess() {
+            openFullDiskAccessSettings()
+        }
+    }
+
+    private func openFullDiskAccessSettings() {
+        guard let url = URL(string:
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"
+        ) else { return }
+        NSWorkspace.shared.open(url)
     }
 
     private func refreshFocusPolicyState() {
@@ -240,6 +271,7 @@ final class StatusBarController: NSObject {
                   let policy = FocusPolicy(rawValue: raw) else { continue }
             item.state = policy == current ? .on : .off
         }
+        fdaCaptionItem.isHidden = Focus.hasFullDiskAccess()
     }
 
     // Look for both notchify and notchify-recipes in common install
@@ -346,6 +378,16 @@ final class StatusBarController: NSObject {
 
         img.isTemplate = isTemplate
         return img
+    }
+}
+
+extension StatusBarController: NSMenuDelegate {
+    // The menu is built once, but Full Disk Access can be granted while
+    // it's closed. Re-evaluate the FDA nudge each time the Focus
+    // Behavior submenu is about to open so it disappears once access is
+    // granted (and reappears if it's revoked).
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        refreshFocusPolicyState()
     }
 }
 

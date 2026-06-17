@@ -30,7 +30,10 @@ enum FocusPolicy: String, CaseIterable {
         get {
             guard let raw = store.string(forKey: defaultsKey),
                   let policy = FocusPolicy(rawValue: raw) else {
-                return .doNotDisturbOnly
+                // Default to Ignore: both mute policies need Full Disk
+                // Access to read Focus state, so a fresh install opts out
+                // of muting (and the FDA prompt) until the user picks one.
+                return .ignore
             }
             return policy
         }
@@ -60,6 +63,14 @@ enum Focus {
         case otherFocus
     }
 
+    // ~/Library/DoNotDisturb is gated behind Full Disk Access. A
+    // normally-launched app (login / launchd / `open`) gets
+    // NSFileReadNoPermission (257) here and can't see Focus state at
+    // all; only a process that inherits the terminal's FDA (e.g.
+    // `swift run`) can. See hasFullDiskAccess().
+    private static let assertionsPath =
+        ("~/Library/DoNotDisturb/DB/Assertions.json" as NSString).expandingTildeInPath
+
     static func shouldMute() -> Bool {
         switch FocusPolicy.current {
         case .ignore:
@@ -71,9 +82,25 @@ enum Focus {
         }
     }
 
+    // Whether the daemon can actually read the Focus assertions file.
+    // Without Full Disk Access the read fails with 257 and currentState()
+    // silently reports .inactive, so every Focus leaks through unmuted.
+    // A genuinely missing file (260, no Focus DB yet) still counts as
+    // accessible: "no file" legitimately means "no Focus active". This
+    // is what the menu uses to surface the "Grant Full Disk Access"
+    // nudge instead of failing silently.
+    static func hasFullDiskAccess() -> Bool {
+        do {
+            _ = try Data(contentsOf: URL(fileURLWithPath: assertionsPath))
+            return true
+        } catch {
+            let e = error as NSError
+            return e.domain == NSCocoaErrorDomain && e.code == NSFileReadNoSuchFileError
+        }
+    }
+
     static func currentState() -> State {
-        let path = ("~/Library/DoNotDisturb/DB/Assertions.json" as NSString).expandingTildeInPath
-        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else {
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: assertionsPath)) else {
             return .inactive
         }
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
