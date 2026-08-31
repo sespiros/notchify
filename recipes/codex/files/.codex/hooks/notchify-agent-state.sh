@@ -50,6 +50,51 @@ if ready:
 payload=$(read_payload)
 blocked_body=""
 
+# Since codex added an automatic approvals reviewer (config.toml
+# approvals_reviewer = "auto_review", alias "guardian_subagent"),
+# PermissionRequest hooks fire for every action the reviewer decides,
+# but the user is never prompted: hooks run first, then the reviewer
+# approves or denies on its own (codex-rs/core/src/tools/approvals.rs).
+# Notifying on those is a popup per tool call, all false alarms, so
+# skip the blocked notification when the event is a PermissionRequest
+# and the config routes approvals to the auto reviewer. The payload
+# cannot tell an auto-reviewed approval from a user-facing one (its
+# permission_mode collapses to "default" for both), so this squelches
+# PermissionRequest entirely while auto_review is configured; a session
+# whose policy still prompts the user (e.g. untrusted) shows the prompt
+# in the TUI but loses the notch ping, the acceptable tradeoff.
+permission_request_event() {
+    [ -n "$payload" ] || return 1
+    command -v python3 >/dev/null 2>&1 || return 1
+    printf %s "$payload" | python3 -c '
+import json, sys
+
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    sys.exit(1)
+
+sys.exit(0 if data.get("hook_event_name") == "PermissionRequest" else 1)
+' 2>/dev/null
+}
+
+approvals_auto_reviewed() {
+    _cfg="${CODEX_HOME:-$HOME/.codex}/config.toml"
+    [ -f "$_cfg" ] || return 1
+    # Root-level key only: stop at the first TOML table header so a
+    # same-named key inside a [section] cannot match.
+    awk '
+        BEGIN { rc = 1 }
+        /^[[:space:]]*\[/ { exit }
+        /^[[:space:]]*approvals_reviewer[[:space:]]*=[[:space:]]*"(auto_review|guardian_subagent)"/ { rc = 0; exit }
+        END { exit rc }
+    ' "$_cfg" 2>/dev/null
+}
+
+if [ "$state" = "blocked" ] && permission_request_event && approvals_auto_reviewed; then
+    exit 0
+fi
+
 extract_stop_input_body() {
     [ -n "$payload" ] || return 0
     command -v python3 >/dev/null 2>&1 || return 0
