@@ -37,6 +37,34 @@ case "$state" in
     *) exit 0 ;;
 esac
 
+# nh_tty: terminal device to ring, or empty. Inside tmux it's the
+# pane's pts; otherwise walk up to the nearest ancestor with a real
+# controlling tty (the ssh session pts). NOTCHIFY_BELL_TTY overrides.
+# Defined ahead of the transports because it doubles as the headless
+# gate right below.
+nh_tty() {
+    if [ -n "${NOTCHIFY_BELL_TTY:-}" ]; then printf '%s\n' "$NOTCHIFY_BELL_TTY"; return 0; fi
+    if [ -n "${TMUX:-}" ] && [ -n "${TMUX_PANE:-}" ] && command -v tmux >/dev/null 2>&1; then
+        _p=$(tmux display -p -t "$TMUX_PANE" '#{pane_tty}' 2>/dev/null) || _p=""
+        [ -n "$_p" ] && { printf '%s\n' "$_p"; return 0; }
+    fi
+    _pid=${PPID:-0}
+    while [ -n "$_pid" ] && [ "$_pid" -gt 1 ]; do
+        _t=$(ps -o tty= -p "$_pid" 2>/dev/null | tr -d ' ')
+        case "$_t" in pts/*|tty*) printf '/dev/%s\n' "$_t"; return 0 ;; esac
+        _pid=$(ps -o ppid= -p "$_pid" 2>/dev/null | tr -d ' ')
+    done
+    return 1
+}
+
+# Headless gate: settings.json hooks are global, so headless claude
+# runs (claude -p, SDK sessions, GUI-spawned agents) fire this hook
+# too, and a batch of them means a "done" popup per run, all noise.
+# No tmux pane and no controlling tty anywhere in the ancestry means
+# nobody is watching this session from a terminal and there is no
+# pane for --focus to jump back to: stay silent.
+nh_tty >/dev/null 2>&1 || exit 0
+
 read_payload() {
     command -v python3 >/dev/null 2>&1 || return 0
     python3 -c '
@@ -159,23 +187,7 @@ elif [ -n "${TMUX_PANE:-}" ] && command -v tmux >/dev/null 2>&1; then
 fi
 
 # --- bell transport --------------------------------------------------
-# nh_tty: terminal device to ring, or empty. Inside tmux it's the
-# pane's pts; otherwise walk up to the nearest ancestor with a real
-# controlling tty (the ssh session pts). NOTCHIFY_BELL_TTY overrides.
-nh_tty() {
-    if [ -n "${NOTCHIFY_BELL_TTY:-}" ]; then printf '%s\n' "$NOTCHIFY_BELL_TTY"; return 0; fi
-    if [ -n "${TMUX:-}" ] && [ -n "${TMUX_PANE:-}" ] && command -v tmux >/dev/null 2>&1; then
-        _p=$(tmux display -p -t "$TMUX_PANE" '#{pane_tty}' 2>/dev/null) || _p=""
-        [ -n "$_p" ] && { printf '%s\n' "$_p"; return 0; }
-    fi
-    _pid=${PPID:-0}
-    while [ -n "$_pid" ] && [ "$_pid" -gt 1 ]; do
-        _t=$(ps -o tty= -p "$_pid" 2>/dev/null | tr -d ' ')
-        case "$_t" in pts/*|tty*) printf '/dev/%s\n' "$_t"; return 0 ;; esac
-        _pid=$(ps -o ppid= -p "$_pid" 2>/dev/null | tr -d ' ')
-    done
-    return 1
-}
+# (nh_tty is defined next to the headless gate above.)
 
 # nh_bell <icon> <sound> <group> <title> <body>: set the pane title to
 # the marker "notchify|<icon>|<sound>|<group>|<title>|<body>"
