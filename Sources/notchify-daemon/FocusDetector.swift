@@ -93,7 +93,7 @@ enum FocusDetector {
             "list-panes", "-a", "-F",
             "#{pane_active} #{window_active} #{session_attached} #{pane_id}"
         ])
-        let result = runProcess(tmux, args)
+        let result = runProcess(tmux, args, timeout: tmuxProbeTimeout)
         if result.exitCode != 0 { return [] }
         var panes: Set<String> = []
         for line in (result.stdout ?? "").split(separator: "\n") {
@@ -107,6 +107,19 @@ enum FocusDetector {
         return panes
     }
 
+    /// Bound on the inline tmux probes. tmux answers over a local
+    /// socket in a few ms; anything longer means the server is stuck
+    /// and the poll tick should give up rather than hold the UI.
+    private static let tmuxProbeTimeout: TimeInterval = 2.0
+
+    /// How long one poll tick waits for a fresh Ghostty title. A
+    /// normal osascript round trip is 100-300 ms.
+    private static let ghosttyProbeWait: TimeInterval = 1.0
+
+    /// True while an osascript probe is outstanding. Ticks that find
+    /// it set return nil instead of spawning another osascript.
+    private static var ghosttyProbeInFlight = false
+
     /// Title of Ghostty's currently-focused window.
     /// `tell app … to get name of windows` returns the windows in
     /// z-order with the focused one first (verified empirically;
@@ -114,13 +127,40 @@ enum FocusDetector {
     /// `front terminal` does not). We return only the first item
     /// rather than the whole list to keep the match scoped to the
     /// actually-visible window.
+    ///
+    /// The probe runs on a background queue and a tick waits at most
+    /// `ghosttyProbeWait` for it. osascript normally answers in well
+    /// under that, but it hangs outright while the system is wedged:
+    /// a stalled network mount (Time Machine over SMB on a bad link)
+    /// holds the mount table lock, and every process that registered
+    /// with LaunchServices, osascript included, then hangs on exit,
+    /// unkillable. Waiting for it inline on the main actor froze the
+    /// whole daemon for hours (2026-09-07). While a probe is
+    /// outstanding, further ticks return nil, so the Ghostty detector
+    /// vetoes dismissal and the notification stays up rather than
+    /// being dismissed on stale data. No kill and no respawn on
+    /// purpose: a wedged child ignores SIGKILL, and one new osascript
+    /// per tick would pile up unkillable zombies. The single
+    /// outstanding probe returns when the wedge clears, and polling
+    /// resumes by itself.
     static func ghosttyFocusedWindowTitle() -> String? {
-        let r = runProcess(
-            "/usr/bin/osascript",
-            ["-e", "tell application \"Ghostty\" to return name of first window"]
-        )
-        guard r.exitCode == 0 else { return nil }
-        return r.stdout?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if ghosttyProbeInFlight { return nil }
+        ghosttyProbeInFlight = true
+        let done = DispatchSemaphore(value: 0)
+        let title = ProbeBox<String?>(nil)
+        ghosttyProbeQueue.async {
+            let r = runProcess(
+                "/usr/bin/osascript",
+                ["-e", "tell application \"Ghostty\" to return name of first window"]
+            )
+            if r.exitCode == 0 {
+                title.value = r.stdout?.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            done.signal()
+            Task { @MainActor in ghosttyProbeInFlight = false }
+        }
+        if done.wait(timeout: .now() + ghosttyProbeWait) == .timedOut { return nil }
+        return title.value
     }
 
     /// Internal (not private) so click-time action builders under
@@ -152,13 +192,25 @@ enum FocusDetector {
     }
 
     private static func captureOutput(_ launchPath: String, _ arguments: [String]) -> String? {
-        let r = runProcess(launchPath, arguments)
+        let r = runProcess(launchPath, arguments, timeout: tmuxProbeTimeout)
         guard r.exitCode == 0 else { return nil }
         let out = (r.stdout ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         return out.isEmpty ? nil : out
     }
 
-    private static func runProcess(_ launchPath: String, _ arguments: [String]) -> (exitCode: Int32, stdout: String?, stderr: String?) {
+    /// Run `launchPath` and collect its output. With a `timeout` the
+    /// call gives up after that long: the child gets SIGKILL and the
+    /// result reads as a failure. Inline callers on the main actor
+    /// (the tmux probes) pass one so a stuck subprocess costs a
+    /// bounded stall. The Ghostty probe passes none: it has its own
+    /// off-main-actor guard, and a wedged osascript cannot be killed
+    /// anyway. Nonisolated so the Ghostty probe can call it from its
+    /// background queue.
+    nonisolated private static func runProcess(
+        _ launchPath: String,
+        _ arguments: [String],
+        timeout: TimeInterval? = nil
+    ) -> (exitCode: Int32, stdout: String?, stderr: String?) {
         let p = Process()
         p.launchPath = launchPath
         p.arguments = arguments
@@ -166,10 +218,58 @@ enum FocusDetector {
         let errPipe = Pipe()
         p.standardOutput = outPipe
         p.standardError = errPipe
+        let exited = DispatchSemaphore(value: 0)
+        p.terminationHandler = { _ in exited.signal() }
         do { try p.run() } catch { return (-1, nil, nil) }
-        p.waitUntilExit()
-        let stdout = String(data: outPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)
-        let stderr = String(data: errPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)
+        // Drain both pipes off-thread. Reading after the exit wait
+        // deadlocks a child that fills a pipe; reading before it
+        // blocks on a child that never closes its end.
+        let out = ProbeBox<Data>(Data())
+        let err = ProbeBox<Data>(Data())
+        let drained = DispatchGroup()
+        drained.enter()
+        probeIOQueue.async {
+            out.value = outPipe.fileHandleForReading.readDataToEndOfFile()
+            drained.leave()
+        }
+        drained.enter()
+        probeIOQueue.async {
+            err.value = errPipe.fileHandleForReading.readDataToEndOfFile()
+            drained.leave()
+        }
+        if let timeout {
+            if exited.wait(timeout: .now() + timeout) == .timedOut {
+                kill(p.processIdentifier, SIGKILL)
+                return (-1, nil, nil)
+            }
+        } else {
+            exited.wait()
+        }
+        // The pipes close with the child; the bound only covers a
+        // grandchild that inherited them and lingers.
+        _ = drained.wait(timeout: .now() + 1.0)
+        let stdout = String(data: out.value, encoding: .utf8)
+        let stderr = String(data: err.value, encoding: .utf8)
         return (p.terminationStatus, stdout, stderr?.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+}
+
+/// Serial queue the Ghostty AppleScript probe runs on, so a hung
+/// osascript parks a background thread rather than the main actor.
+private let ghosttyProbeQueue = DispatchQueue(label: "cloud.seimenis.notchify.ghostty-probe")
+
+/// Readers for subprocess pipes; concurrent because stdout and stderr
+/// of one child are drained side by side.
+private let probeIOQueue = DispatchQueue(label: "cloud.seimenis.notchify.probe-io", attributes: .concurrent)
+
+/// Lock-guarded cell for handing a value from a background probe
+/// back to its caller.
+private final class ProbeBox<T>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: T
+    init(_ value: T) { stored = value }
+    var value: T {
+        get { lock.lock(); defer { lock.unlock() }; return stored }
+        set { lock.lock(); stored = newValue; lock.unlock() }
     }
 }

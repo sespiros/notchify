@@ -85,3 +85,7 @@ lazy, per-tick caches.
 A detector that is the only one that needs the Ghostty title pays
 one AppleScript invocation per tick, regardless of how many rows
 reference it.
+
+The Ghostty probe itself runs off the main actor.
+`FocusDetector.ghosttyFocusedWindowTitle()` spawns osascript on a background queue, waits up to one second for it, and returns `nil` on every tick while a probe is still outstanding.
+A `nil` title makes the Ghostty detector veto, so a hung osascript keeps the notification up instead of freezing the daemon (which it did while a stalled Time Machine mount held the mount table lock).
