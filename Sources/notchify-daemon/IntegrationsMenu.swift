@@ -62,16 +62,12 @@ final class IntegrationsMenu: NSObject, NSMenuDelegate {
     private func fetchStatus() -> [Entry]? {
         let bin = Self.recipesBinaryPath()
         guard FileManager.default.fileExists(atPath: bin) else { return nil }
-        let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: bin)
-        proc.arguments = ["status", "--json"]
-        let pipe = Pipe()
-        proc.standardOutput = pipe
-        proc.standardError = FileHandle.nullDevice
-        do { try proc.run() } catch { return nil }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        proc.waitUntilExit()
-        // status returns nonzero on drift; we still want the data.
+        // Bounded: this runs on the main actor when the menu opens,
+        // and a stuck child must cost a short stall, not a frozen
+        // menu. status returns nonzero on drift; we still want the
+        // data, so only the launch failure / timeout sentinel bails.
+        let r = Subprocess.run(bin, ["status", "--json"], timeout: Subprocess.inlineTimeout)
+        guard r.exitCode != -1, let data = r.stdout?.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode([Entry].self, from: data)
     }
 

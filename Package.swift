@@ -28,5 +28,10 @@ let package = Package(
             name: "notchify-recipes",
             path: "Sources/notchify-recipes"
         ),
+        .testTarget(
+            name: "notchify-daemonTests",
+            dependencies: ["notchify-daemon"],
+            path: "Tests/notchify-daemonTests"
+        ),
     ]
 )

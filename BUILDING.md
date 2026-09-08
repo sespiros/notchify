@@ -11,6 +11,7 @@
 
 ```sh
 swift build -c release
+swift test
 ```
 
 Output binaries land in `.build/release/`:
