@@ -237,6 +237,26 @@ grep -q 'integration:codex/blocked' "$TMP/notchify.log" || fail "permission hook
 grep -q 'git commit -m fix' "$TMP/notchify.log" || fail "permission hook missing command body"
 pass "permission request becomes blocked notification"
 
+echo "==> codex hook drops a tmux pane it does not run under"
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+mkdir -p "$TMP/bin"
+cat > "$TMP/bin/notchify" <<SH
+#!/bin/sh
+printf '%s pane=%s\n' "\$*" "\${TMUX_PANE:-none}" >> "$TMP/notchify.log"
+SH
+chmod 755 "$TMP/bin/notchify"
+"$BIN" install codex --prefix "$TMP" >/dev/null
+# The env a daemon-hosted session hands the hook: a pane from some other
+# (here nonexistent) tmux server. NOTCHIFY_BELL_TTY gets past the
+# headless gate so the delivery itself can be inspected.
+printf '{}' | HOME="$TMP" PATH="$TMP/bin:$PATH" TMPDIR="$TMP" \
+  TMUX="$TMP/no-such-socket,1,0" TMUX_PANE=%999999 NOTCHIFY_BELL_TTY="$TMP/faketty" \
+  sh "$TMP/.codex/hooks/notchify-agent-state.sh" idle ||
+  fail "codex hook failed with a stale tmux pane"
+grep -q 'pane=none' "$TMP/notchify.log" || fail "stale TMUX_PANE leaked into the notchify focus key"
+pass "stale tmux pane is not used as the focus key"
+
 echo "==> pi install lays down the extension"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT

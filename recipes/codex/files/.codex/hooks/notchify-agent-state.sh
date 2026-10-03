@@ -56,6 +56,30 @@ nh_tty() {
     return 1
 }
 
+# Stale tmux context: unless started with --no-daemon, the codex TUI
+# runs its session inside the shared app-server daemon, and hooks then
+# run in the daemon with the env of whichever pane first spawned it.
+# That TMUX_PANE belongs to another session (or is gone), so the --focus
+# key points at the wrong pane and the persistent popup is never
+# dismissed by visiting the real one. Keep the tmux context only when
+# this hook descends from the pane's own process; otherwise drop it and
+# let the headless gate below decide.
+nh_pane_is_ours() {
+    command -v tmux >/dev/null 2>&1 || return 1
+    _pp=$(tmux display -p -t "$TMUX_PANE" '#{pane_id} #{pane_pid}' 2>/dev/null) || return 1
+    [ "${_pp%% *}" = "$TMUX_PANE" ] || return 1
+    _pp=${_pp#* }
+    _pid=$$
+    while [ -n "$_pid" ] && [ "$_pid" -gt 1 ]; do
+        [ "$_pid" = "$_pp" ] && return 0
+        _pid=$(ps -o ppid= -p "$_pid" 2>/dev/null | tr -d ' ')
+    done
+    return 1
+}
+if [ -n "${TMUX_PANE:-}" ] && ! nh_pane_is_ours; then
+    unset TMUX TMUX_PANE
+fi
+
 # Headless gate: hooks.json is global, so codex runs spawned by a GUI
 # (the ChatGPT app's codex-security scan workers, computer use) or by
 # cron/CI fire this hook too, and a fleet of headless exec workers
