@@ -209,5 +209,36 @@ Existing <code class="notranslate">--icon /path/to/file.png</code> and SF Symbol
 <p><a href="https://github.com/sespiros/notchify/compare/v0.7.0...v0.7.1">compare v0.7.0...v0.7.1</a></p>]]></description>
             <enclosure url="https://github.com/sespiros/notchify/releases/download/v0.7.1/Notchify-0.7.1.dmg" sparkle:edSignature="jSHzz7+G9jihiSwB/+ivUecYlU2Apq9ZfnPLsaxaDY/67618HhY5XPu4jngsJ19rtLslxy7jxoys6E/cEV/zCA==" length="2923986" type="application/octet-stream"/>
         </item>
+        <item>
+            <title>v0.8.0</title>
+            <pubDate>Sat, 03 Oct 2026 22:16:30 +0000</pubDate>
+            <sparkle:version>0.8.0</sparkle:version>
+            <sparkle:shortVersionString>0.8.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<p>v0.8.0 brings remote agents to the notch and fixes Focus muting.</p>
+<h2>✨ New features</h2>
+<h3>🛰️ Remote agents over SSH</h3>
+<p>Agents on a remote host you reach over ssh+tmux can now notify your Mac, with nothing to install on the remote but the recipe hook.<br>
+Set it up with <code class="notranslate">recipes/remote-install.sh</code>; see <strong>Remote agents over SSH</strong> in the recipes README.</p>
+<h3>🦘 <code class="notranslate">--jump</code></h3>
+<p>Like <code class="notranslate">--focus</code>, but the notification shows even when you are already on the source pane.<br>
+Useful when one pane carries many sources, like an ssh session running several agents.</p>
+<h2>🐛 Bug fixes</h2>
+<ul>
+<li>"Mute for Any Focus Mode" now works for Focus modes turned on by a schedule.</li>
+<li>Notchify tells you when Focus muting needs Full Disk Access instead of silently not muting.</li>
+<li>Notchify no longer freezes when a helper process hangs.</li>
+<li>Fewer spurious notifications from agent recipes: none from background agent runs, and none for Codex approvals handled by its automatic reviewer.</li>
+</ul>
+<h2>Updating</h2>
+<p>Click <strong>Check for Updates…</strong> under the Notchify menubar icon, then update Claude Code or Codex under <strong>Integrations</strong> if prompted.<br>
+If you use Focus muting, re-enable Full Disk Access for Notchify afterwards.</p>
+<h2>Fresh install</h2>
+<p>Download <code class="notranslate">Notchify-0.8.0.dmg</code>, drag to Applications, then:</p>
+<div class="highlight highlight-source-shell"><pre class="notranslate">xattr -d com.apple.quarantine /Applications/Notchify.app</pre></div>
+<h2>Full changelog</h2>
+<p><a href="https://github.com/sespiros/notchify/compare/v0.7.1...v0.8.0">compare v0.7.1...v0.8.0</a></p>]]></description>
+            <enclosure url="https://github.com/sespiros/notchify/releases/download/v0.8.0/Notchify-0.8.0.dmg" sparkle:edSignature="xm2yqWU5UyUYmPdUDbdDHb0TVLo3SuwNmZnkfOq3IiGiUjVTt3QAX/ZTUsejz7M3D1fOMAro/sWTj0g6u9bkBQ==" length="2948419" type="application/octet-stream"/>
+        </item>
     </channel>
 </rss>
