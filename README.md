@@ -31,6 +31,7 @@ Positional args are `<title> [body]`, mirroring Linux's `notify-send`.
 | `-s, --sound <name>` | `ready`/`warning`/`info`/`success`/`error`, or any name from `/System/Library/Sounds/` (e.g. `Glass`, `Ping`). Default: silent |
 | `-a, --action <url\|cmd>` | URL opened or shell command run on tap. Default: click only dismisses |
 | `-f, --focus` | Mutually exclusive with `--action`. Raises the source terminal app and (in tmux) jumps to the originating pane. Implies `--timeout 0` |
+| `-j, --jump` | Like `--focus`, but still shows the notification when you are already on the source pane. For many sources sharing one pane (e.g. remote agents over ssh+tmux) |
 | `-t, --timeout <secs>` | Auto-dismiss seconds. `0` = persistent (sits in chip until clicked). Default: `5` |
 | `-g, --group <name>` | Stack notifications under a named chip. Subsequent `--group <same>` calls collapse into one chip with a count badge. Chip's icon/color are taken from the first notification in that group |
 
