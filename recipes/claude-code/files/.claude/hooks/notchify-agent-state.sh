@@ -175,6 +175,15 @@ PY
 transcript=$(printf %s "$payload" | sed -n 's/.*"transcript_path":"\([^"]*\)".*/\1/p')
 custom=$(extract_session_title "$transcript")
 title="claude"
+# Claude Code background sessions (/background, `claude --bg`) run on a
+# pty of their own that no terminal window or tmux pane shows, so there
+# is nothing for --focus to match and the popup would never clear.
+# Notify anyway, with the session name, and let it expire.
+focus_args="--focus"
+if [ "${CLAUDE_CODE_SESSION_KIND:-}" = bg ]; then
+    focus_args="--timeout 60"
+    [ -n "${CLAUDE_CODE_SESSION_NAME:-}" ] && custom=${custom:-$CLAUDE_CODE_SESSION_NAME}
+fi
 if [ -n "$custom" ]; then
     title="$custom"
 elif [ -n "${NOTCHIFY_CONTEXT_NAME:-}" ]; then
@@ -268,14 +277,14 @@ case "$state" in
         # detection. notchify is sub-second; the hook can wait.
         if ! nh_deliver "$title" "$body" -- --sound info \
                       --icon "integration:claude-code/blocked" \
-                      --group "claude:blocked" --focus; then
+                      --group "claude:blocked" $focus_args; then
             exit 0
         fi
         ;;
     idle)
         if ! nh_deliver "$title" "done" -- --sound ready \
                       --icon "integration:claude-code/done" \
-                      --group "claude:done" --focus; then
+                      --group "claude:done" $focus_args; then
             exit 0
         fi
         ;;
