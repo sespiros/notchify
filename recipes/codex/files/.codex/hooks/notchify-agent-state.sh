@@ -272,7 +272,10 @@ if [ -n "${NOTCHIFY_CONTEXT_NAME:-}" ]; then
 elif [ -n "${NOTCHIFY_CONTEXT_REPO:-}" ]; then
     title="codex $NOTCHIFY_CONTEXT_REPO"
 elif [ -n "${TMUX_PANE:-}" ] && command -v tmux >/dev/null 2>&1; then
-    loc=$(tmux display-message -pt "$TMUX_PANE" '#{session_name}:#{window_name}' 2>/dev/null || echo "")
+    # session:index, plus the window name only when someone set it.
+    # An automatic name is the running command (claude's is its
+    # version), so every agent window would get the same title.
+    loc=$(tmux display-message -pt "$TMUX_PANE" '#{session_name}:#{window_index}#{?#{automatic-rename},, #{window_name}}' 2>/dev/null || echo "")
     [ -n "$loc" ] && title="codex $loc"
 fi
 
