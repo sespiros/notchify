@@ -118,6 +118,23 @@ out=$(NOTCHIFY_PREFIX="$TMP" "$BIN" status 2>&1) && fail "status did not return 
 echo "$out" | grep -q "registrations missing" || fail "status missing drift message: $out"
 pass "drift detected after external rewrite"
 
+echo "==> status offers an update only when the bundle is newer"
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+"$BIN" install codex --prefix "$TMP" >/dev/null
+bundled=$(head -n1 recipes/codex/VERSION)
+echo $((bundled + 1)) > "$TMP/.config/notchify/installed/codex"
+json=$(NOTCHIFY_PREFIX="$TMP" "$BIN" status --json)
+echo "$json" | jq -e '.[] | select(.name == "codex" and .updateAvailable == false)' >/dev/null ||
+  fail "newer installed recipe reported as an update: $json"
+NOTCHIFY_PREFIX="$TMP" "$BIN" status | grep -q "update available" &&
+  fail "status text offers a downgrade" || true
+echo $((bundled - 1)) > "$TMP/.config/notchify/installed/codex"
+json=$(NOTCHIFY_PREFIX="$TMP" "$BIN" status --json)
+echo "$json" | jq -e '.[] | select(.name == "codex" and .updateAvailable == true)' >/dev/null ||
+  fail "older installed recipe not reported as an update: $json"
+pass "update offered only for a newer bundled recipe"
+
 echo "==> install requires the notchify CLI"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT

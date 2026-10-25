@@ -169,6 +169,15 @@ struct RecipeStatus {
     let installed: String?
     let drift: Bool
     let cliAvailable: Bool
+
+    // Only a newer bundled recipe is an update. An installed recipe
+    // ahead of the bundle (copied in from a dev checkout) must not
+    // offer an "update" that would install the older bundled copy.
+    var updateAvailable: Bool {
+        guard let installed else { return false }
+        if let a = Int(available), let i = Int(installed) { return a > i }
+        return installed != available
+    }
 }
 
 func collectStatus() -> [RecipeStatus] {
@@ -198,7 +207,7 @@ func cmdStatus(json: Bool) {
         // come from filenames and a VERSION file; assume safe characters.
         let parts = entries.map { e -> String in
             let installed = e.installed.map { "\"\($0)\"" } ?? "null"
-            return "{\"name\":\"\(e.name)\",\"available\":\"\(e.available)\",\"installed\":\(installed),\"drift\":\(e.drift),\"cliAvailable\":\(e.cliAvailable)}"
+            return "{\"name\":\"\(e.name)\",\"available\":\"\(e.available)\",\"installed\":\(installed),\"drift\":\(e.drift),\"cliAvailable\":\(e.cliAvailable),\"updateAvailable\":\(e.updateAvailable)}"
         }
         print("[" + parts.joined(separator: ",") + "]")
         return
@@ -207,7 +216,7 @@ func cmdStatus(json: Bool) {
     for e in entries {
         if let inst = e.installed {
             var notes: [String] = []
-            if inst != e.available { notes.append("update available") }
+            if e.updateAvailable { notes.append("update available") }
             if e.drift {
                 notes.append("registrations missing — re-run install")
                 anyDrift = true
