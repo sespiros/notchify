@@ -91,6 +91,37 @@ if [ "$state" = "blocked" ]; then
     fi
 fi
 
+# claude_pid: the claude process this hook runs under: the nearest
+# ancestor whose argv0 is "claude" or a versioned claude binary.
+claude_pid() {
+    _pid=${PPID:-0}
+    _n=0
+    while [ "$_pid" -gt 1 ] && [ $_n -lt 4 ]; do
+        _a=$(ps -o command= -p "$_pid" 2>/dev/null | awk '{print $1}')
+        case "${_a##*/}" in
+            claude|[0-9]*.[0-9]*.[0-9]*) printf '%s\n' "$_pid"; return 0 ;;
+        esac
+        _pid=$(ps -o ppid= -p "$_pid" 2>/dev/null | tr -d ' ')
+        _n=$((_n + 1))
+    done
+    return 1
+}
+
+# A turn that ends with a background task still running (a listener
+# started with run_in_background, a long build) is not done: claude
+# wakes up again when the task finishes, and a popup per wake piles
+# up. Stay quiet until a turn ends with no background task left.
+# Claude Code runs each Bash command in a shell sourced from its
+# shell-snapshots dir, a direct child of claude, so a live one at Stop
+# is a background task. If that ever changes, nothing matches and the
+# popup comes as before.
+if [ "$state" = idle ] && _cp=$(claude_pid); then
+    if ps -axo ppid=,command= 2>/dev/null |
+        awk -v p="$_cp" '$1 == p && /\.claude\/shell-snapshots\/snapshot-/ { f = 1 } END { exit !f }'; then
+        exit 0
+    fi
+fi
+
 # Debounce: Claude Code's Stop hook fires multiple times per turn
 # when the assistant alternates between text and tool calls, which
 # otherwise spams a "done" popup per phase. Skip the notify if we
