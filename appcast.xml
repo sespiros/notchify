@@ -263,5 +263,26 @@ If you use Focus muting, re-enable Full Disk Access for Notchify afterwards.</p>
 <p><a href="https://github.com/sespiros/notchify/compare/v0.8.0...v0.8.1">compare v0.8.0...v0.8.1</a></p>]]></description>
             <enclosure url="https://github.com/sespiros/notchify/releases/download/v0.8.1/Notchify-0.8.1.dmg" sparkle:edSignature="wQJwjIsRJlTz90rhPS+WI+9y67J695FDiefcDVHepIxdHdzbLi7zUH4bUToZfoPeyRtaESoPntnkH1vQenXbDg==" length="2951798" type="application/octet-stream"/>
         </item>
+        <item>
+            <title>v0.8.2</title>
+            <pubDate>Mon, 26 Oct 2026 23:57:07 +0000</pubDate>
+            <sparkle:version>0.8.2</sparkle:version>
+            <sparkle:shortVersionString>0.8.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<p>v0.8.2 fixes tmux popups that stayed up in the window you were looking at.</p>
+<h2>🐛 Bug fixes</h2>
+<ul>
+<li>A popup from a tmux pane now clears in the Ghostty window that shows the pane. Before, a popup from a session that no window showed when it arrived stayed up when you visited it, and cleared in another window instead.</li>
+<li>Agent popup titles keep a meaningful tmux window name, such as one from byobu's <code class="notranslate">automatic-rename-format</code>, so you can tell which session finished.</li>
+</ul>
+<h2>Updating</h2>
+<p>Click <strong>Check for Updates…</strong> under the Notchify menubar icon, then update Claude Code and Codex under <strong>Integrations</strong>.</p>
+<h2>Fresh install</h2>
+<p>Download <code class="notranslate">Notchify-0.8.2.dmg</code>, drag to Applications, then:</p>
+<div class="highlight highlight-source-shell"><pre class="notranslate">xattr -d com.apple.quarantine /Applications/Notchify.app</pre></div>
+<h2>Full changelog</h2>
+<p><a href="https://github.com/sespiros/notchify/compare/v0.8.1...v0.8.2">compare v0.8.1...v0.8.2</a></p>]]></description>
+            <enclosure url="https://github.com/sespiros/notchify/releases/download/v0.8.2/Notchify-0.8.2.dmg" sparkle:edSignature="3cuhiBBV/XTjtW4yJel+lni1mBeM+E/+8aW4AgZMGdrYo8pnjwR7b0Qs4+xyEBLCHoWYJsDy9XXew0Kd6nzgCg==" length="2956922" type="application/octet-stream"/>
+        </item>
     </channel>
 </rss>
