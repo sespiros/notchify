@@ -112,6 +112,34 @@ enum FocusDetector {
         return panes
     }
 
+    /// Client ttys ("/dev/ttys003" form) keyed by the pane each
+    /// attached client is showing right now. Lets the Ghostty
+    /// detector follow a pane into whichever window shows it, since
+    /// the tty captured at send time is wherever tmux guessed then.
+    /// Empty when tmux is missing or list-clients reports nothing
+    /// (byobu setups, see `activeTmuxPanes`).
+    static func clientTTYsByPane(socket: String?) -> [String: Set<String>] {
+        clientsProbe.ask { listClientPanes(socket: socket) } ?? [:]
+    }
+
+    nonisolated private static func listClientPanes(socket: String?) -> [String: Set<String>] {
+        guard let tmux = resolveTmuxBinary() else { return [:] }
+        var args: [String] = []
+        if let socket {
+            args.append(contentsOf: ["-S", socket])
+        }
+        args.append(contentsOf: ["list-clients", "-F", "#{pane_id} #{client_tty}"])
+        let result = Subprocess.run(tmux, args, timeout: Subprocess.inlineTimeout)
+        if result.exitCode != 0 { return [:] }
+        var byPane: [String: Set<String>] = [:]
+        for line in (result.stdout ?? "").split(separator: "\n") {
+            let parts = line.split(separator: " ").map(String.init)
+            guard parts.count >= 2 else { continue }
+            byPane[parts[0], default: []].insert(parts[1])
+        }
+        return byPane
+    }
+
     /// Title of Ghostty's currently-focused window.
     /// `tell app … to get name of windows` returns the windows in
     /// z-order with the focused one first (verified empirically;
@@ -187,3 +215,4 @@ enum FocusDetector {
 /// the main-actor askers can both reach them.
 private let ghosttyProbe = GuardedProbe<String>(label: "ghostty-title", wait: 1.0)
 private let tmuxProbe = GuardedProbe<Set<String>>(label: "tmux-panes", wait: 1.0)
+private let clientsProbe = GuardedProbe<[String: Set<String>]>(label: "tmux-clients", wait: 1.0)

@@ -14,19 +14,23 @@ final class FocusSnapshot {
 
     private let panesProvider: (String?) -> Set<String>
     private let ghosttyTitleProvider: () -> String?
+    private let clientsProvider: (String?) -> [String: Set<String>]
 
     private var panesCache: [String?: Set<String>] = [:]
     private var ghosttyTitleResolved: Bool = false
     private var ghosttyTitleCache: String?
+    private var clientsCache: [String?: [String: Set<String>]] = [:]
 
     init(
         frontmostBundle: String?,
         panesProvider: @escaping (String?) -> Set<String>,
-        ghosttyTitleProvider: @escaping () -> String?
+        ghosttyTitleProvider: @escaping () -> String?,
+        clientsProvider: @escaping (String?) -> [String: Set<String>] = { _ in [:] }
     ) {
         self.frontmostBundle = frontmostBundle
         self.panesProvider = panesProvider
         self.ghosttyTitleProvider = ghosttyTitleProvider
+        self.clientsProvider = clientsProvider
     }
 
     /// Capture a snapshot from real OS state.
@@ -34,7 +38,8 @@ final class FocusSnapshot {
         FocusSnapshot(
             frontmostBundle: FocusDetector.frontmostBundleID(),
             panesProvider: { FocusDetector.activeTmuxPanes(socket: $0) },
-            ghosttyTitleProvider: { FocusDetector.ghosttyFocusedWindowTitle() }
+            ghosttyTitleProvider: { FocusDetector.ghosttyFocusedWindowTitle() },
+            clientsProvider: { FocusDetector.clientTTYsByPane(socket: $0) }
         )
     }
 
@@ -43,6 +48,12 @@ final class FocusSnapshot {
         let panes = panesProvider(socket)
         panesCache[socket] = panes
         return panes
+    }
+
+    /// Ttys of the tmux clients showing `pane` right now.
+    func clientTTYs(showing pane: String, socket: String?) -> Set<String> {
+        if clientsCache[socket] == nil { clientsCache[socket] = clientsProvider(socket) }
+        return clientsCache[socket]?[pane] ?? []
     }
 
     func ghosttyFocusedTitle() -> String? {
