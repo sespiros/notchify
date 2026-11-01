@@ -209,11 +209,27 @@ title="claude"
 # Claude Code background sessions (/background, `claude --bg`) run on a
 # pty of their own that no terminal window or tmux pane shows, so there
 # is nothing for --focus to match and the popup would never clear.
-# Notify anyway, with the session name, and let it expire.
+# Notify anyway and let it expire. Hooks do not get
+# CLAUDE_CODE_SESSION_KIND, so recognise the session by its claude
+# process: a background one is started with --resume <path>/<id>.jsonl,
+# an interactive one resumes by id. That command line is not a documented
+# interface; if it changes, the check is false and the popup keeps --focus.
+is_bg_session() {
+    _pid=$$
+    while [ "$_pid" -gt 1 ] 2>/dev/null; do
+        _pid=$(ps -o ppid= -p "$_pid" 2>/dev/null | tr -d ' ')
+        [ -n "$_pid" ] || return 1
+        case "$(ps -o comm= -p "$_pid" 2>/dev/null)" in
+            claude|*/claude|*/claude/versions/*)
+                ps -o command= -p "$_pid" 2>/dev/null | grep -q -- '--resume [^ ]*\.jsonl'
+                return ;;
+        esac
+    done
+    return 1
+}
 focus_args="--focus"
-if [ "${CLAUDE_CODE_SESSION_KIND:-}" = bg ]; then
+if is_bg_session; then
     focus_args="--timeout 60"
-    [ -n "${CLAUDE_CODE_SESSION_NAME:-}" ] && custom=${custom:-$CLAUDE_CODE_SESSION_NAME}
 fi
 if [ -n "$custom" ]; then
     title="$custom"
